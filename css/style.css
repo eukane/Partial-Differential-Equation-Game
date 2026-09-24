@@ -47,7 +47,7 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
 
-#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+#app { display: flex; flex-direction: column; height: 100%; }
 
 /* ---------------- 상단 바 ---------------- */
 .topbar {
