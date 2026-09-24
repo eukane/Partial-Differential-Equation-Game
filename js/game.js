@@ -65,7 +65,7 @@
   function orderFor() {
     return [...Array(S.players.length).keys()];
   }
-  const BRAWL_LOCK_MS = 3000;   // 난전에서 오답 후 쉬는 시간
+  const BRAWL_LOCK_MS = 10000;  // 난전에서 오답 후 쉬는 시간
   const COIN_COUNT = 3;
 
   const BOX = [
@@ -447,7 +447,7 @@
         ${btn('move')}${btn('box')}
       </div>
       ${brawl() ? `<p class="brawl-state">${S.myBusy ? '⏳ 내 행동을 처리하는 중…' : Date.now() < S.lockUntil ? `😵 오답! ${Math.ceil((S.lockUntil - Date.now()) / 1000)}초 뒤 다시 도전` : '🔥 난전: 문제를 맞히는 대로 바로 행동!'}</p>` : ''}
-      <p class="hint">공격·이동·랜덤박스는 <b>문제를 맞혀야</b> 실행됩니다. ${brawl() ? '오답이면 3초 동안 쉬어요.' : '오답이면 그대로 턴 종료!'}<br>
+      <p class="hint">공격·이동·랜덤박스는 <b>문제를 맞혀야</b> 실행됩니다. ${brawl() ? `오답이면 ${BRAWL_LOCK_MS / 1000}초 동안 쉬어요.` : '오답이면 그대로 턴 종료!'}<br>
       판 위 점선·네모는 지금 공격하면 닿는 곳, 빨간 원은 맞는 적이에요.</p>`;
     el.turnPanel.querySelectorAll('[data-a]').forEach(b => { b.onclick = () => onAction(b.dataset.a); });
     el.turnPanel.querySelectorAll('[data-r]').forEach(b => { b.onclick = () => setAim(p.ang + Number(b.dataset.r)); });
@@ -885,7 +885,15 @@
     }
     Net.status(null);
     Net.live(null);
-    if (brawl() && !q.ok) { S.lockUntil = Date.now() + BRAWL_LOCK_MS; setTimeout(renderTurn, BRAWL_LOCK_MS + 50); }
+    if (brawl() && !q.ok) {
+      // 오답: 쉬는 시간 동안 1초마다 남은 시간을 다시 그린다
+      S.lockUntil = Date.now() + BRAWL_LOCK_MS;
+      clearInterval(S.lockTimer);
+      S.lockTimer = setInterval(() => {
+        renderTurn();
+        if (Date.now() >= S.lockUntil) clearInterval(S.lockTimer);
+      }, 1000);
+    }
     submit(act);
   }
 
@@ -2200,7 +2208,7 @@
           <li><b>조준은 무료</b>입니다. 판 위의 칸을 누르면 그 칸을 조준하고, 버튼으로 5°·15°씩 미세 조정할 수 있어요.</li>
           <li>공격·이동·랜덤박스 중 하나를 고르고, <b>과목</b>(공통·미적분·확률과 통계·기하)과 <b>난이도</b>(기본·심화)를 골라 문제를 풉니다. 맞히면 실행, 틀리면 턴 종료.</li>
           <li><b>턴제</b>: 항상 1번 → 2번 → … 순서대로 돌아가요. 1라운드는 <b>준비 라운드</b>라 공격할 수 없고(이동·랜덤박스·증강만), 추가 행동으로는 공격할 수 없어요.</li>
-          <li><b>🔥 난전</b> (온라인): 턴 없이 모두 동시에 문제를 풀고, 맞히는 대로 바로 행동해요. 오답이면 3초 동안 쉬어요. 방장이 대기실에서 모드를 골라요.</li>
+          <li><b>🔥 난전</b> (온라인): 턴 없이 모두 동시에 문제를 풀고, 맞히는 대로 바로 행동해요. 오답이면 ${BRAWL_LOCK_MS / 1000}초 동안 쉬어요. 방장이 대기실에서 모드를 골라요.</li>
           <li><b>🪙 동전 칸</b>: 판에 동전 칸이 ${COIN_COUNT}개 있어요. 문제를 맞히고 그 칸으로 이동하면 동전을 던져, 앞면이면 살아 있는 모두의 위치가 무작위로 섞여요. 쓴 동전 칸은 다른 곳으로 옮겨 가요.</li>
           <li><b>온라인 관전</b>: 다른 사람 차례에는 그 사람이 고르는 과목·문제·답이 내 화면에도 실시간으로 보여요.</li>
           <li><b>점수</b>: 정답마다 기본 100점 / 심화 200점 + 속도 보너스(최대 100점). <b>⚡ 빠른 정답</b>(제한 시간 1/3 안)이면 공격 피해 +10, 이동 범위 +1칸, 랜덤박스 꽝 없음.</li>
