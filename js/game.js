@@ -203,6 +203,25 @@
     $('#btnRules2').onclick = showRules;
     $('#btnView').onclick = toggleView;
     $('#btnLeave').onclick = () => Net.leave();
+    // 휴대폰 메뉴: 상단 버튼들과 기록을 한곳에
+    const drawer = $('#drawer');
+    const setMenu = open => {
+      drawer.classList.toggle('hidden', !open);
+      $('#btnMenu').setAttribute('aria-expanded', String(open));
+      if (open) {
+        $('#drawerLog').innerHTML = el.log.innerHTML || '<li class="muted">아직 기록이 없어요.</li>';
+        $('#mView').textContent = $('#btnView').textContent;
+        $('#mLeave').hidden = $('#btnLeave').hidden;
+      }
+    };
+    $('#btnMenu').onclick = () => setMenu(drawer.classList.contains('hidden'));
+    $('#btnMenuClose').onclick = () => setMenu(false);
+    drawer.addEventListener('click', e => { if (e.target === drawer) setMenu(false); });
+    $('#mRules').onclick = () => { setMenu(false); showRules(); };
+    $('#mView').onclick = () => { setMenu(false); toggleView(); };
+    $('#mLeave').onclick = () => { setMenu(false); Net.leave(); };
+    // 패널 높이가 바뀌면(행동 버튼·상태 줄) 보드 영역도 다시 맞춘다
+    if (window.ResizeObserver) new ResizeObserver(() => layout()).observe(el.stage);
     el.board.addEventListener('click', e => {
       const c = e.target.closest('.cell');
       if (c) { if (!c.classList.contains('void')) onCellClick(+c.dataset.x, +c.dataset.y); return; }
@@ -312,7 +331,9 @@
   function layout() {
     const r = el.stage.getBoundingClientRect();
     // 판이 어느 방향으로 돌아도 화면 안에 들어오게: 네모는 대각선(√2배), 오각형은 외접원 지름(약 1.05배)
-    const spread = BOARD.kind === 'pentagon' ? 1.22 : 1.41;
+    // 세로로 긴 휴대폰 화면은 위아래가 남으므로 판을 더 크게 (대각선 방향일 때 가장자리 한두 칸은 살짝 잘릴 수 있음)
+    const portrait = r.height > r.width * 1.25;
+    const spread = BOARD.kind === 'pentagon' ? (portrait ? 1.02 : 1.22) : (portrait ? 1.12 : 1.41);
     S.cell = Math.max(22, Math.min(88, Math.floor(Math.min(r.width / (N * spread), r.height / (N * 0.925)))));
     el.board.style.setProperty('--cell', S.cell + 'px');
     updateCamera();

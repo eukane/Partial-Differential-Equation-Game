@@ -1066,6 +1066,265 @@
   ];
 
   // =====================================================================
+  //  심화 다단계 문제 (2~3단계를 엮은 수능 상위권 유형)
+  // =====================================================================
+  const COMMON_MULTI = [
+    function cubicRootCount() {
+      // f(x) = x³ − 3p²x + k 가 서로 다른 세 실근 ⇔ f(−p) > 0 > f(p) ⇔ −2p³ < k < 2p³
+      const p = ri(1, 2);
+      const ans = 4 * p ** 3 - 1;
+      return num('삼차방정식의 실근 (다단계)',
+        `방정식 $x^3 - ${3 * p * p}x + k = 0$ 이 서로 다른 세 실근을 갖도록 하는 정수 $k$ 의 개수는?`, ans,
+        [4 * p ** 3 + 1, 2 * p ** 3 - 1, 2 * p ** 3, 4 * p ** 3],
+        `① $f'(x) = 3x^2 - ${3 * p * p} = 0$ → $x = \\pm ${p}$. ② 극댓값 $f(-${p}) = ${2 * p ** 3} + k > 0$, 극솟값 $f(${p}) = -${2 * p ** 3} + k < 0$. ③ $-${2 * p ** 3} < k < ${2 * p ** 3}$ → 정수 $${ans}$개`);
+    },
+    function cubicMaxToMin() {
+      // f' = 3(x − p)(x − q) → f(q) − f(p) = −(q − p)³ / 2
+      const p = ri(-2, 1), d = pick([2, 4]), q = p + d, M = ri(-5, 12);
+      const ans = M - d ** 3 / 2;
+      return num('극댓값과 극솟값 (다단계)',
+        `최고차항의 계수가 $1$ 인 삼차함수 $f(x)$ 가 $x = ${p}$ 에서 극대, $x = ${q}$ 에서 극소이다. 극댓값이 $${M}$ 일 때, 극솟값은?`, ans,
+        [M - d ** 3, M - d ** 3 / 6, M + d ** 3 / 2, -M, M - d * d],
+        `① $f'(x) = 3(x ${signed(-p)})(x ${signed(-q)})$. ② $f(${q}) - f(${p}) = \\displaystyle\\int_{${p}}^{${q}} f'(x)\\,dx = -\\frac{(${q} - (${p}))^3}{2} = -${d ** 3 / 2}$. ③ 극솟값 $= ${M} - ${d ** 3 / 2} = ${ans}$`);
+    },
+    function seqFromSum() {
+      const pp = ri(1, 3), q = ri(-4, 4), m = ri(8, 15), k = ri(2, 6);
+      // S_n = p n² + q n → a_n = p(2n − 1) + q
+      const a = n => pp * (2 * n - 1) + q;
+      const ans = a(m) + a(k);
+      return num('수열의 합과 일반항 (다단계)',
+        `수열 $\\{a_n\\}$ 의 첫째항부터 제$n$항까지의 합이 $S_n = ${poly([[pp, 'n^2'], [q, 'n']])}$ 일 때, $a_{${m}} + a_{${k}}$ 의 값은?`, ans,
+        [pp * m * m + q * m + pp * k * k + q * k, a(m) + a(k) + 2 * pp, 2 * pp * (m + k) + 2 * q, a(m) - a(k)],
+        `① $a_n = S_n - S_{n-1} = ${pp === 1 ? '' : pp}(2n - 1)${signed(q)}$ ($n \\ge 1$ 에서 성립). ② $a_{${m}} = ${a(m)}$, $a_{${k}} = ${a(k)}$ → 합 $${ans}$`);
+    },
+    function cubicLineArea() {
+      // y = x³ 과 y = k²x 로 둘러싸인 넓이 (두 부분) = k⁴ / 2
+      const k = ri(1, 3);
+      const ans = frac(k ** 4, 2);
+      return build('두 곡선 사이의 넓이 (다단계)',
+        `곡선 $y = x^3$ 과 직선 $y = ${k * k === 1 ? '' : k * k}x$ 로 둘러싸인 두 부분의 넓이의 합은?`,
+        T(ans),
+        [frac(k ** 4, 4), String(k ** 4), frac(k ** 4, 8), frac(k ** 3, 2), frac(k ** 4, 3)].map(T),
+        `① 교점 $x = 0,\\ \\pm ${k}$. ② 대칭이므로 $2\\displaystyle\\int_0^{${k}} (${k * k === 1 ? '' : k * k}x - x^3)\\,dx = 2\\left(\\frac{${k ** 4}}{2} - \\frac{${k ** 4}}{4}\\right) = ${ans}$`);
+    },
+    function sinCosCube() {
+      // sinθ + cosθ = r → sinθcosθ = (r² − 1)/2 → sin³θ + cos³θ = r(3 − r²)/2
+      const [n, d] = pick([[1, 2], [1, 3], [2, 3], [1, 4], [3, 4]]);
+      const ans = frac(n * (3 * d * d - n * n), 2 * d ** 3);
+      return build('삼각함수의 활용 (다단계)',
+        `$\\sin\\theta + \\cos\\theta = ${frac(n, d)}$ 일 때, $\\sin^3\\theta + \\cos^3\\theta$ 의 값은?`,
+        T(ans),
+        [frac(n ** 3, d ** 3), frac(n * n - d * d, 2 * d * d), frac(n * (3 * d * d + n * n), 2 * d ** 3), frac(n * (d * d - n * n), 2 * d ** 3), frac(3 * n, 2 * d)].map(T),
+        `① 제곱: $1 + 2\\sin\\theta\\cos\\theta = ${frac(n * n, d * d)}$ → $\\sin\\theta\\cos\\theta = ${frac(n * n - d * d, 2 * d * d)}$. ② $s^3 + c^3 = (s + c)^3 - 3sc(s + c) = ${ans}$`);
+    },
+    function logSystem() {
+      let a, b;
+      do { a = ri(3, 8); b = ri(1, 4); } while ((a + b) % 2 || b >= a);
+      const x = 2 ** ((a + b) / 2), y = 2 ** ((a - b) / 2);
+      return num('로그 연립방정식 (다단계)',
+        `$\\log_2 x + \\log_2 y = ${a}$, $\\log_2 x - \\log_2 y = ${b}$ 일 때, $x + y$ 의 값은?`, x + y,
+        [x * y, x - y, 2 ** a + 2 ** b, a + b],
+        `① 더하면 $2\\log_2 x = ${a + b}$ → $x = 2^{${(a + b) / 2}} = ${x}$. ② 빼면 $2\\log_2 y = ${a - b}$ → $y = ${y}$. ③ $x + y = ${x + y}$`);
+    },
+  ];
+
+  const CALC_MULTI = [
+    function paramTangentIntercept() {
+      let a, b, k;
+      do { a = ri(-2, 2); b = ri(-3, 3); k = pick([1, 2, -1]); } while (2 * k + a === 0);
+      const x0 = k * k + a * k, y0 = k ** 3 + b * k, top = 3 * k * k + b, bot = 2 * k + a;
+      // y절편 = y0 − m x0 = (y0·bot − top·x0) / bot
+      const ans = frac(y0 * bot - top * x0, bot);
+      return build('매개변수 곡선의 접선 (다단계)',
+        `$x = t^2${tail([[a, 't']])},\\ y = t^3${tail([[b, 't']])}$ 위의 $t = ${k}$ 에 대응하는 점에서의 접선의 $y$ 절편은?`,
+        T(ans),
+        [frac(top, bot), frac(y0 * bot + top * x0, bot), String(y0 - x0), frac(y0 * top - bot * x0, top), frac(-(y0 * bot - top * x0), bot), String(y0), frac(y0 * bot - top * x0 + bot, bot), frac(y0 * bot - top * x0 - bot, bot), frac(y0 * bot - top * x0 + 2 * bot, bot)].map(T),
+        `① 점 $(${x0},\\ ${y0})$. ② 기울기 $\\dfrac{dy/dt}{dx/dt} = ${frac(top, bot)}$. ③ $y = ${frac(top, bot)}(x - ${x0 < 0 ? `(${x0})` : x0})${signed(y0)}$ 에 $x = 0$ → $${ans}$`);
+    },
+    function inverseComposite() {
+      const a = ri(1, 3), t = pick([1, 2, -1]), c = pick([1, 3, -1, 5]);
+      const v = t ** 3 + a * t;
+      if ((v - c) % 2) return inverseComposite();
+      const pp = (v - c) / 2;
+      const fp = 3 * t * t + a;
+      const ans = frac(2, fp);
+      return build('역함수와 합성함수 (다단계)',
+        `$f(x) = x^3${tail([[a, 'x']])}$ 의 역함수를 $g(x)$ 라 하고 $h(x) = g(2x${signed(c)})$ 라 할 때, $h'(${pp})$ 의 값은?`,
+        T(ans),
+        [frac(1, fp), frac(2, 3 * v * v + a), String(2 * fp), frac(1, 2 * fp), frac(2, fp + 1)].map(T),
+        `① $2\\cdot ${pp < 0 ? `(${pp})` : pp}${signed(c)} = ${v} = f(${t})$ → $g(${v}) = ${t}$. ② $h'(x) = 2g'(2x${signed(c)})$. ③ $g'(${v}) = \\dfrac{1}{f'(${t})} = \\dfrac{1}{${fp}}$ → $h'(${pp}) = ${ans}$`);
+    },
+    function integralFuncMax() {
+      // F(x) = ∫_0^x (t − a)(t − b) dt, a < b → 극댓값 F(a) = a³/3 − (a+b)a²/2 + a²b
+      const a = ri(1, 2), b = a + ri(1, 3);
+      const ans = frac(2 * a ** 3 - 3 * (a + b) * a * a + 6 * a * a * b, 6);
+      return build('정적분으로 정의된 함수의 극값 (다단계)',
+        `$F(x) = \\displaystyle\\int_0^x (t - ${a})(t - ${b})\\,dt$ 의 극댓값은?`,
+        T(ans),
+        [frac(2 * b ** 3 - 3 * (a + b) * b * b + 6 * a * b * b, 6), frac(a * a * b, 2), frac(-(2 * a ** 3 - 3 * (a + b) * a * a + 6 * a * a * b), 6), frac(2 * a ** 3 - 3 * (a + b) * a * a + 6 * a * a * b, 3), String(a * b)].map(T),
+        `① $F'(x) = (x - ${a})(x - ${b})$ → $x = ${a}$ 에서 극대. ② $F(${a}) = \\left[\\frac{t^3}{3} - \\frac{${a + b}t^2}{2} + ${a * b}t\\right]_0^{${a}} = ${ans}$`);
+    },
+    function geoSeriesFromTerms() {
+      const [rn, rd] = pick([[1, 2], [1, 3], [2, 3], [-1, 2]]);
+      const a1 = pick([rd ** 3 * 2, rd ** 3 * 3, rd ** 3]);
+      const a2 = frac(a1 * rn, rd), a4 = frac(a1 * rn ** 3, rd ** 3);
+      const ans = frac(a1 * rd, rd - rn);
+      return build('등비급수 (다단계)',
+        `등비수열 $\\{a_n\\}$ 에서 $a_2 = ${a2},\\ a_4 = ${a4}$ 이고 공비가 ${rn > 0 ? '양수' : '음수'}일 때, $\\displaystyle\\sum_{n=1}^{\\infty} a_n$ 의 값은?`,
+        T(ans),
+        [frac(a1 * rn, rd - rn), frac(a1 * rd, rd + rn), String(a1), frac(a1 * rd, 2 * (rd - rn)), frac(2 * a1 * rd, rd - rn)].map(T),
+        `① $r^2 = \\dfrac{a_4}{a_2} = ${frac(rn * rn, rd * rd)}$ → $r = ${frac(rn, rd)}$. ② $a_1 = \\dfrac{a_2}{r} = ${a1}$. ③ $\\dfrac{a_1}{1 - r} = ${ans}$`);
+    },
+    function expTangentIntercept() {
+      const k = ri(1, 3);
+      const E = k === 1 ? 'e' : `e^{${k}}`;
+      return build('접선의 방정식 (다단계)',
+        `곡선 $y = xe^x$ 위의 점 $(${k},\\ ${k === 1 ? '' : k}${E})$ 에서의 접선의 $y$ 절편은?`,
+        T(`-${k * k === 1 ? '' : k * k}${E}`),
+        [`${k * k === 1 ? '' : k * k}${E}`, `-${k}${E}`, `${k + 1}${E}`, `-${k * (k + 1)}${E}`, `-${E}`].map(T),
+        `① $y' = (x + 1)e^x$ → 기울기 $${k + 1}${E}$. ② $y = ${k + 1}${E}(x - ${k}) + ${k === 1 ? '' : k}${E}$. ③ $x = 0$: $${k}${E} - ${k * (k + 1)}${E} = -${k * k === 1 ? '' : k * k}${E}$`);
+    },
+    function expFuncMax() {
+      // f(x) = (x² − a)e^{−x}, 1 + a = s² → 극대 x = 1 + s, 극댓값 (2 + 2s)e^{−(1+s)}
+      const s = ri(2, 3), a = s * s - 1;
+      return build('함수의 극값 (다단계)',
+        `함수 $f(x) = (x^2 - ${a})e^{-x}$ 의 극댓값은?`,
+        T(`${2 + 2 * s}e^{-${1 + s}}`),
+        [`${2 - 2 * s}e^{${s - 1}}`, `${2 + 2 * s}e^{${1 + s}}`, `${(1 + s) ** 2}e^{-${1 + s}}`, `${2 + 2 * s}e^{-${s}}`, `-${a}`].map(T),
+        `① $f'(x) = -(x^2 - 2x - ${a})e^{-x}$ → $x = 1 \\pm ${s}$. ② 부호가 $+ \\to -$ 로 바뀌는 $x = ${1 + s}$ 에서 극대. ③ $f(${1 + s}) = (${(1 + s) ** 2} - ${a})e^{-${1 + s}} = ${2 + 2 * s}e^{-${1 + s}}$`);
+    },
+  ];
+
+  const PROB_MULTI = [
+    function bayesBags() {
+      const w1 = ri(2, 4), b1 = ri(1, 3), w2 = ri(1, 3), b2 = ri(2, 4);
+      // 주사위 1, 2 → A (1/3), 나머지 → B (2/3)
+      const pA = frac(1, 3);
+      const n = w1 * (w2 + b2), d = w1 * (w2 + b2) + 2 * w2 * (w1 + b1);
+      const ans = frac(n, d);
+      return build('조건부확률 (다단계)',
+        `주머니 A 에는 흰 공 ${w1}개, 검은 공 ${b1}개, 주머니 B 에는 흰 공 ${w2}개, 검은 공 ${b2}개가 있다. 주사위를 던져 2 이하이면 A, 아니면 B 에서 공을 하나 꺼낸다. 꺼낸 공이 흰 공일 때, 그 공이 A 에서 나왔을 확률은?`,
+        T(ans),
+        [frac(w1, w1 + b1), pA, frac(w1, w1 + w2), frac(w1 * (w2 + b2), w1 * (w2 + b2) + w2 * (w1 + b1)), frac(2 * w2 * (w1 + b1), d), frac(n + 1, d), frac(n, d + 1), frac(n - 1, d)].map(T),
+        `① $P(A \\cap 흰) = \\frac{1}{3}\\cdot\\frac{${w1}}{${w1 + b1}}$. ② $P(흰) = \\frac{1}{3}\\cdot\\frac{${w1}}{${w1 + b1}} + \\frac{2}{3}\\cdot\\frac{${w2}}{${w2 + b2}}$. ③ 나누면 $${ans}$`);
+    },
+    function expectedMax() {
+      const n = ri(4, 9);
+      const ans = frac(2 * (n + 1), 3);
+      return build('기댓값 (다단계)',
+        `$1$ 부터 $${n}$ 까지 적힌 카드 ${n}장 중 2장을 동시에 뽑을 때, 뽑힌 두 수 중 큰 수를 $X$ 라 하자. $E(X)$ 는?`,
+        T(ans),
+        [frac(n + 1, 2), frac(2 * n + 1, 3), frac(n + 2, 2), frac(2 * n, 3), frac(n * (n + 1), 2 * (n - 1))].map(T),
+        `① $P(X = k) = \\dfrac{k - 1}{_{${n}}\\mathrm{C}_2}$. ② $E(X) = \\dfrac{\\sum_{k=2}^{${n}} k(k-1)}{${n * (n - 1) / 2}} = \\dfrac{${(n + 1) * n * (n - 1) / 3}}{${n * (n - 1) / 2}} = ${ans}$`);
+    },
+    function binomAtLeast() {
+      const n = ri(4, 7);
+      const ans = frac(n + 1, 2 ** n);
+      return build('이항분포의 확률 (다단계)',
+        `동전을 ${n}번 던질 때 앞면이 나오는 횟수를 $X$ 라 하자. $P(X \\ge ${n - 1})$ 의 값은?`,
+        T(ans),
+        [frac(n, 2 ** n), frac(1, 2 ** n), frac(n + 1, 2 ** (n - 1)), frac(2 * n, 2 ** n), frac(n - 1, 2 ** n)].map(T),
+        `① $P(X = ${n - 1}) = \\frac{${n}}{2^{${n}}}$, $P(X = ${n}) = \\frac{1}{2^{${n}}}$. ② 합 $= ${ans}$`);
+    },
+    function normalTable() {
+      // P(0 ≤ Z ≤ 1) = 0.3413, P(0 ≤ Z ≤ 2) = 0.4772
+      const m = ri(5, 12) * 10, s = pick([4, 5, 10]);
+      const [lo, hi, ans, why] = pick([
+        [m - s, m + 2 * s, '0.8185', '0.3413 + 0.4772'],
+        [m + s, null, '0.1587', '0.5 - 0.3413'],
+        [m - 2 * s, m + s, '0.8185', '0.4772 + 0.3413'],
+        [m + s, m + 2 * s, '0.1359', '0.4772 - 0.3413'],
+        [null, m - 2 * s, '0.0228', '0.5 - 0.4772'],
+      ]);
+      const q = lo != null && hi != null ? `P(${lo} \\le X \\le ${hi})` : lo != null ? `P(X \\ge ${lo})` : `P(X \\le ${hi})`;
+      return build('정규분포 (다단계)',
+        `확률변수 $X$ 가 정규분포 $\\mathrm{N}(${m},\\ ${s}^2)$ 을 따를 때, $${q}$ 의 값은? (단, $P(0 \\le Z \\le 1) = 0.3413$, $P(0 \\le Z \\le 2) = 0.4772$)`,
+        T(ans),
+        ['0.8185', '0.1587', '0.1359', '0.0228', '0.6826', '0.9544', '0.3413'].map(T),
+        `① 표준화 $Z = \\dfrac{X - ${m}}{${s}}$. ② 구간을 $Z$ 로 바꾸면 ${why} $= ${ans}$`);
+    },
+    function nonAdjacent() {
+      const a = ri(3, 4), b = ri(2, 3);
+      const ans = fact(a) * P(a + 1, b);
+      return num('이웃하지 않는 순열 (다단계)',
+        `남학생 ${a}명과 여학생 ${b}명이 일렬로 설 때, 여학생끼리 서로 이웃하지 않게 서는 경우의 수는?`, ans,
+        [fact(a + b) - ans, fact(a) * C(a + 1, b), fact(a + b), fact(a) * fact(b)],
+        `① 남학생을 먼저 세우기 $${a}! = ${fact(a)}$. ② 사이사이와 양 끝 ${a + 1}자리 중 ${b}자리에 여학생 세우기 $_{${a + 1}}\\mathrm{P}_{${b}} = ${P(a + 1, b)}$. ③ $${ans}$`);
+    },
+    function monotoneWithValue() {
+      const c = ri(2, 4);
+      const ans = c * C(7 - c, 2);
+      return num('함수의 개수 (다단계)',
+        `$X = \\{1, 2, 3, 4\\}$, $Y = \\{1, 2, 3, 4, 5\\}$ 에 대하여 $f(1) \\le f(2) \\le f(3) \\le f(4)$, $f(2) = ${c}$ 를 만족시키는 함수 $f: X \\to Y$ 의 개수는?`, ans,
+        [c * C(6 - c, 2), C(7 - c, 2), c + C(7 - c, 2), c * (6 - c) ** 2],
+        `① $f(1) \\le ${c}$: ${c}가지. ② $${c} \\le f(3) \\le f(4) \\le 5$: $_{${6 - c}}\\mathrm{H}_2 = ${C(7 - c, 2)}$. ③ $${c}\\times ${C(7 - c, 2)} = ${ans}$`);
+    },
+  ];
+
+  const GEO_MULTI = [
+    function ellipseRightTriangle() {
+      // ∠FPF' = 90° 인 점 P 는 원 x² + y² = c² 위에 있으므로 c ≥ b 인 타원에서만 존재한다
+      const [a, b, c] = pick([[5, 3, 4], [13, 5, 12], [10, 6, 8]]);
+      return num('타원과 직각삼각형 (다단계)',
+        `타원 $\\dfrac{x^2}{${a * a}} + \\dfrac{y^2}{${b * b}} = 1$ 의 두 초점 $F, F'$ 과 타원 위의 점 $P$ 에 대하여 $\\angle FPF' = 90^\\circ$ 일 때, 삼각형 $PFF'$ 의 넓이는?`, b * b,
+        [2 * b * b, c * c, b * c, a * b],
+        `① $\\overline{PF} + \\overline{PF'} = ${2 * a}$. ② $\\overline{PF}^2 + \\overline{PF'}^2 = (2c)^2 = ${4 * c * c}$. ③ $2\\overline{PF}\\cdot\\overline{PF'} = ${4 * a * a} - ${4 * c * c}$ → 넓이 $\\frac{1}{2}\\overline{PF}\\cdot\\overline{PF'} = ${b * b}$`);
+    },
+    function hyperbolaRightTriangle() {
+      const [a, b, c] = pick([[3, 4, 5], [4, 3, 5], [6, 8, 10], [5, 12, 13], [8, 6, 10]]);
+      return num('쌍곡선과 직각삼각형 (다단계)',
+        `쌍곡선 $\\dfrac{x^2}{${a * a}} - \\dfrac{y^2}{${b * b}} = 1$ 의 두 초점 $F, F'$ 과 쌍곡선 위의 점 $P$ 에 대하여 $\\angle FPF' = 90^\\circ$ 일 때, 삼각형 $PFF'$ 의 넓이는?`, b * b,
+        [2 * b * b, a * a, a * b, c * c - b * b + 1],
+        `① $|\\overline{PF'} - \\overline{PF}| = ${2 * a}$. ② $\\overline{PF}^2 + \\overline{PF'}^2 = ${4 * c * c}$. ③ $2\\overline{PF}\\cdot\\overline{PF'} = ${4 * c * c} - ${4 * a * a}$ → 넓이 $${b * b}$`);
+    },
+    function vecMinNorm() {
+      const [r, s, L] = pick([[3, 4, 5], [4, 3, 5], [6, 8, 10], [5, 12, 13], [8, 6, 10]]);
+      let p, q;
+      do { p = ri(-5, 6); q = ri(-5, 6); } while (p * s - q * r === 0);
+      const ans = frac(Math.abs(p * s - q * r), L);
+      return build('벡터의 크기의 최솟값 (다단계)',
+        `두 벡터 $\\vec a = (${p},\\ ${q})$, $\\vec b = (${r},\\ ${s})$ 와 실수 $t$ 에 대하여 $|\\vec a + t\\vec b|$ 의 최솟값은?`,
+        T(ans),
+        [frac(Math.abs(p * r + q * s), L), frac(Math.abs(p * s - q * r), L * L), String(Math.abs(p * s - q * r)), frac(Math.abs(p * s - q * r) + 1, L), frac(Math.abs(p * s - q * r), 2 * L)].map(T),
+        `① $|\\vec a + t\\vec b|^2$ 는 $t$ 에 대한 이차식, $t = -\\dfrac{\\vec a\\cdot\\vec b}{|\\vec b|^2}$ 에서 최소. ② 최솟값 $= \\dfrac{|${p}\\cdot ${s} - ${q < 0 ? `(${q})` : q}\\cdot ${r}|}{${L}} = ${ans}$ (수직 성분의 길이)`);
+    },
+    function focalChord() {
+      const p = ri(1, 3), m = pick([1, 2]);
+      // y² = 4px, 초점 (p, 0) 을 지나는 기울기 m 인 현의 길이 = 4p(1 + m²)/m²
+      const ans = frac(4 * p * (1 + m * m), m * m);
+      return build('포물선의 초점현 (다단계)',
+        `포물선 $y^2 = ${4 * p}x$ 의 초점을 지나고 기울기가 $${m}$ 인 직선이 포물선과 만나는 두 점을 $A, B$ 라 할 때, 선분 $AB$ 의 길이는?`,
+        T(ans),
+        [frac(4 * p, m * m), String(4 * p), frac(4 * p * (1 + m * m), m), frac(2 * p * (1 + m * m), m * m), frac(4 * p * (1 + m), m * m), String(6 * p), String(10 * p), String(12 * p), String(2 * p), String(3 * p)].map(T),
+        `① 교점의 $x$ 좌표 합: $(${m === 1 ? '' : m * m}(x - ${p})^2 = ${4 * p}x)$ 에서 $x_1 + x_2 = ${frac(2 * p * m * m + 4 * p, m * m)}$. ② 포물선의 정의로 $\\overline{AB} = x_1 + x_2 + 2p = ${ans}$`);
+    },
+    function pointPlaneDist() {
+      const [[a, b, c], n] = pick([[[1, 2, 2], 3], [[2, 1, 2], 3], [[2, 3, 6], 7], [[6, 2, 3], 7], [[1, 4, 8], 9], [[4, 4, 7], 9]]);
+      const P0 = [ri(-3, 3), ri(-3, 3), ri(-3, 3)], d = ri(-9, 9);
+      const v = a * P0[0] + b * P0[1] + c * P0[2] + d;
+      if (v === 0) return pointPlaneDist();
+      const ans = frac(Math.abs(v), n);
+      return build('점과 평면 사이의 거리 (다단계)',
+        `점 $(${P0.join(',\\ ')})$ 과 평면 $${poly([[a, 'x'], [b, 'y'], [c, 'z'], [d, '']])} = 0$ 사이의 거리는?`,
+        T(ans),
+        [String(Math.abs(v)), frac(Math.abs(v), n * n), frac(Math.abs(v - d), n), frac(Math.abs(v) + 1, n), frac(Math.abs(v), a + b + c)].map(T),
+        `① 법선벡터 $(${a},\\ ${b},\\ ${c})$ 의 크기 $\\sqrt{${a * a + b * b + c * c}} = ${n}$. ② $\\dfrac{|${v}|}{${n}} = ${ans}$`);
+    },
+    function vecProjection() {
+      const [r, s, L] = pick([[3, 4, 5], [4, 3, 5], [6, 8, 10], [5, 12, 13]]);
+      const p = ri(-4, 6), q = ri(-4, 6);
+      const dot = p * r + q * s;
+      if (dot === 0) return vecProjection();
+      const ans = frac(Math.abs(dot), L);
+      return build('정사영 (다단계)',
+        `$\\vec a = (${p},\\ ${q})$ 의 $\\vec b = (${r},\\ ${s})$ 위로의 정사영의 크기는?`,
+        T(ans),
+        [String(Math.abs(dot)), frac(Math.abs(dot), L * L), frac(Math.abs(p * s - q * r), L), frac(Math.abs(dot) + 1, L), frac(Math.abs(dot), 2 * L)].map(T),
+        `① $\\vec a\\cdot\\vec b = ${dot}$, $|\\vec b| = ${L}$. ② 정사영의 크기 $= \\dfrac{|\\vec a\\cdot\\vec b|}{|\\vec b|} = ${ans}$`);
+    },
+  ];
+
+  // =====================================================================
   //  과목(카테고리)별 문제 묶음
   // =====================================================================
   const byName = (arr, names) => names.map(n => {
@@ -1073,19 +1332,32 @@
     if (!f) throw new Error('없는 문제 유형: ' + n);
     return f;
   });
+  // 심화 = 2~3단계를 엮어야 풀리는 문제만. 공식 한 번이면 끝나는 문제는 기본으로 내렸다.
+  const ALL = [...EASY, ...HARD, ...COMMON_EXTRA_EASY, ...COMMON_EXTRA_HARD, ...COMMON_MORE_EASY, ...COMMON_MORE_HARD,
+    ...CALC_EXTRA_EASY, ...CALC_MORE_EASY, ...CALC_MORE_HARD, ...PROB_EASY, ...PROB_HARD, ...PROB_MORE_EASY, ...PROB_MORE_HARD,
+    ...GEO_EASY, ...GEO_HARD, ...GEO_MORE_EASY, ...GEO_MORE_HARD];
+  const pickN = names => byName(ALL, names);
   const CATS = {
     common: {
       name: '공통', sub: '수학Ⅰ · 수학Ⅱ',
-      easy: [...byName(EASY, ['polyDeriv', 'integral', 'extreme', 'tangent']), ...COMMON_EXTRA_EASY, ...COMMON_MORE_EASY],
-      hard: [...byName(HARD, ['undeterminedLimit', 'integralDefined', 'differentiable', 'areaBetween']), ...COMMON_EXTRA_HARD, ...COMMON_MORE_HARD],
+      easy: [...pickN(['polyDeriv', 'integral', 'extreme', 'tangent', 'areaBetween', 'recurrence', 'telescoping']), ...COMMON_EXTRA_EASY, ...COMMON_MORE_EASY],
+      hard: [...pickN(['undeterminedLimit', 'integralDefined', 'differentiable', 'logEquation', 'trigQuadMax', 'trigEqCount', 'logIneq', 'absIntegral', 'velocityDist']), ...COMMON_MULTI],
     },
     calc: {
       name: '미적분', sub: '미적분',
-      easy: [...byName(EASY, ['limit', 'chain', 'product', 'logDeriv', 'second', 'trigMax']), ...CALC_EXTRA_EASY, ...CALC_MORE_EASY],
-      hard: [...byName(HARD, ['inverseDeriv', 'implicitDeriv', 'parametricDeriv', 'eLimit', 'geometricSeries', 'sqrtSeqLimit', 'substitution', 'byParts', 'inflection', 'trigLimit']), ...CALC_MORE_HARD],
+      easy: [...pickN(['limit', 'chain', 'product', 'logDeriv', 'second', 'trigMax', 'inverseDeriv', 'implicitDeriv', 'parametricDeriv', 'eLimit', 'sqrtSeqLimit', 'trigLimit', 'substitution', 'lnAreaParts', 'volumeSection']), ...CALC_EXTRA_EASY, ...CALC_MORE_EASY],
+      hard: [...pickN(['geometricSeries', 'byParts', 'inflection', 'arcLength']), ...CALC_MULTI],
     },
-    prob: { name: '확률과 통계', sub: '확률과 통계', easy: [...PROB_EASY, ...PROB_MORE_EASY], hard: [...PROB_HARD, ...PROB_MORE_HARD] },
-    geo: { name: '기하', sub: '기하', easy: [...GEO_EASY, ...GEO_MORE_EASY], hard: [...GEO_HARD, ...GEO_MORE_HARD] },
+    prob: {
+      name: '확률과 통계', sub: '확률과 통계',
+      easy: [...PROB_EASY, ...PROB_MORE_EASY, ...pickN(['sampleSd', 'normalSym', 'circularAdj', 'repPermCond', 'intSolutions'])],
+      hard: [...pickN(['condProb', 'bernoulli', 'binomVar', 'normalStd', 'sameThingPerm', 'increasingFunc']), ...PROB_MULTI],
+    },
+    geo: {
+      name: '기하', sub: '기하',
+      easy: [...GEO_EASY, ...GEO_MORE_EASY, ...pickN(['sphereCircle', 'hyperbolaVertex', 'ellipseTangentY', 'ellipseTangent', 'projection', 'sphereRadius', 'ellipseFocalSum', 'hyperbolaFocalDiff'])],
+      hard: [...pickN(['parabolaFocalDist', 'vecAngle']), ...GEO_MULTI],
+    },
   };
   let lastName = '';
 
