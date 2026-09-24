@@ -33,17 +33,20 @@
   ];
 
   const ACTIONS = {
-    scatter: { icon: '🎲', name: '난사', sub: '랜덤 좌표 · 벽 3회 반사 · 관통', easy: '피해 25', hard: '피해 35', dmg: { easy: 25, hard: 35 } },
-    aim:     { icon: '🎯', name: '조준 사격', sub: '바라보는 방향으로 직선 발사', easy: '피해 20', hard: '피해 30', dmg: { easy: 20, hard: 30 } },
+    scatter: { icon: '🎲', name: '난사', sub: '랜덤 좌표 · 벽 3회 반사 · 관통', easy: '피해 25', hard: '피해 35', dmg: { easy: 25, hard: 35 }, fast: '피해 +10' },
+    aim:     { icon: '🎯', name: '조준 사격', sub: '바라보는 방향으로 직선 발사', easy: '피해 20', hard: '피해 30', dmg: { easy: 20, hard: 30 }, fast: '피해 +10' },
     rotate:  { icon: '🔄', name: '시점 전환', sub: '무료 · 문제 없음' },
-    move:    { icon: '👣', name: '이동', sub: '바라보는 방향 · 벽에서 반사', easy: '1~3칸', hard: '1~5칸', max: { easy: 3, hard: 5 } },
-    box:     { icon: '🎁', name: '랜덤박스', sub: '무작위 효과 획득', easy: '모든 효과 (꽝 포함)', hard: '꽝 없음' },
+    move:    { icon: '👣', name: '이동', sub: '바라보는 방향 · 벽에서 반사', easy: '1~3칸', hard: '1~5칸', max: { easy: 3, hard: 5 }, fast: '최대 거리 +1칸' },
+    box:     { icon: '🎁', name: '랜덤박스', sub: '무작위 효과 획득', easy: '모든 효과 (꽝 포함)', hard: '꽝 없음', fast: '꽝 없음' },
   };
 
+  // 정답 점수 = 난이도 점수 + 속도 점수(남은 시간 비율 × 100)
   const LEVELS = {
-    easy: { label: '기본', desc: '고3 미적분', time: 45 },
-    hard: { label: '심화', desc: '대학 기초 · 편미분 / PDE', time: 75 },
+    easy: { label: '기본', desc: '고3 기본', time: 45, pts: 100 },
+    hard: { label: '심화', desc: '고3 심화 · 수능 킬러 유형', time: 90, pts: 200 },
   };
+  const FAST_RATIO = 1 / 3;   // 제한 시간의 1/3 안에 맞히면 ⚡ 빠른 정답 (행동 강화)
+  const FAST_DMG = 10;
 
   const BOX = [
     { id: 'heal',   icon: '💚', name: '회복',     desc: 'HP +25',                  w: 3 },
@@ -163,7 +166,7 @@
 
   function makePlayer(p, i, name) {
     return { id: i, name, color: p.color, emoji: p.emoji, x: p.x, y: p.y, dir: p.dir,
-      hp: MAX_HP, alive: true, shield: false, power: false, correct: 0, tries: 0 };
+      hp: MAX_HP, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0 };
   }
 
   function startGame() {
@@ -240,7 +243,7 @@
           <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
           <div class="hp"><div class="hp-fill" style="width:${p.hp}%"></div></div>
         </div>
-        <span class="hpnum">${p.alive ? p.hp : '탈락'}</span>
+        <div class="pnums"><span class="hpnum">${p.alive ? p.hp : '탈락'}</span><span class="score">${p.score}점</span></div>
       </div>`).join('');
   }
 
@@ -494,13 +497,14 @@
     S.phase = 'over';
     renderAll();
     const w = left[0];
-    const stats = S.players.map(p => `<tr><td>${p.emoji} ${esc(p.name)}</td><td>${p.alive ? p.hp : '탈락'}</td><td>${p.correct}/${p.tries}</td></tr>`).join('');
+    const top = Math.max(...S.players.map(p => p.score));
+    const stats = S.players.map(p => `<tr><td>${p.emoji} ${esc(p.name)}</td><td>${p.alive ? p.hp : '탈락'}</td><td>${p.correct}/${p.tries}</td><td>${p.score}${p.score === top && top > 0 ? ' 🏅' : ''}</td></tr>`).join('');
     const c = openModal(`
       <div class="victory" style="--pc:${w ? w.color : '#fff'}">
         <div class="crown">${w ? '👑' : '🤝'}</div>
         <h2>${w ? `${w.emoji} ${esc(w.name)} 승리!` : '무승부'}</h2>
         <p class="muted">${S.round} 라운드 만에 결판이 났습니다.</p>
-        <div class="rules"><table><tr><th>플레이어</th><th>HP</th><th>정답/시도</th></tr>${stats}</table></div>
+        <div class="rules"><table><tr><th>플레이어</th><th>HP</th><th>정답/시도</th><th>점수</th></tr>${stats}</table></div>
         <p></p>
         ${!S.online ? '<button class="primary big" id="btnAgain">다시 하기 ↻</button>'
           : S.online.host ? '<button class="primary big" id="btnAgain">같은 방에서 한 판 더 ↻</button>'
@@ -547,11 +551,12 @@
     renderAll();
 
     Net.status(`${ACTIONS[key].icon} ${ACTIONS[key].name} · ${LEVELS[level].label} 문제 푸는 중…`);
+    S.pendingKey = key;
     const q = await runQuiz(level);
-    const act = { key, level, ok: q.ok, topic: q.topic, to: q.timeout ? 1 : 0 };
+    const act = { key, level, ok: q.ok, topic: q.topic, to: q.timeout ? 1 : 0, fast: q.fast ? 1 : 0, pts: q.pts, sec: q.sec };
     if (q.ok && key === 'move') {
       Net.status('👣 이동 거리 고르는 중…');
-      act.dist = await pickDistance(p, ACTIONS.move.max[level]);
+      act.dist = await pickDistance(p, ACTIONS.move.max[level] + (q.fast ? 1 : 0));
     }
     Net.status(null);
     submit(act);
@@ -580,15 +585,16 @@
       }
       S.phase = 'busy';
       p.tries++;
-      if (act.ok) p.correct++;
-      log(`${tag(p)} ${LEVELS[act.level].label} 문제(${esc(act.topic || '')}) ${act.ok ? '✅ 정답' : act.to ? '⏰ 시간 초과' : '❌ 오답'}`);
+      if (act.ok) { p.correct++; p.score += act.pts || 0; }
+      log(`${tag(p)} ${LEVELS[act.level].label} 문제(${esc(act.topic || '')}) ${act.ok ? `✅ 정답 ${act.sec}초 · +${act.pts}점${act.fast ? ' ⚡빠른 정답' : ''}` : act.to ? '⏰ 시간 초과' : '❌ 오답'}`);
+      if (act.ok && act.fast && S.online && !myTurn()) toast(`⚡ ${p.emoji} ${p.name} 빠른 정답!`);
       renderAll();
       if (!act.ok) {
         if (S.online && !myTurn()) toast(`❌ ${p.emoji} ${p.name} 오답`);
         await endTurn();
         return;
       }
-      await perform(act.key, act.level, act.dist);
+      await perform(act.key, act.level, act.dist, !!act.fast);
       renderAll();
       if (checkWin()) return;
       if (!p.alive) { await endTurn(); return; }
@@ -618,7 +624,9 @@
           ${['easy', 'hard'].map(l => `
             <button class="level ${l}" data-l="${l}">
               <b>${LEVELS[l].label}</b><span>${LEVELS[l].desc}</span><em>${a[l]}</em>
-              ${S.timer ? `<small>⏱ ${LEVELS[l].time}초</small>` : ''}
+              <small>정답 ${LEVELS[l].pts}점 + 속도 보너스 최대 100점</small>
+              <small>⚡ ${Math.round(LEVELS[l].time * FAST_RATIO)}초 안에 맞히면 ${a.fast}</small>
+              ${S.timer ? `<small>⏱ 제한 ${LEVELS[l].time}초</small>` : ''}
             </button>`).join('')}
         </div>
         <button class="ghost wide" data-l="">취소</button>`, 'small');
@@ -660,6 +668,11 @@
         done = true;
         clearInterval(timerId);
         const ok = i === P.answer;
+        const elapsed = Math.min(limit, Date.now() - t0);
+        const sec = Math.round(elapsed / 100) / 10;
+        const speed = ok ? Math.round(100 * Math.max(0, 1 - elapsed / limit)) : 0;
+        const pts = ok ? L.pts + speed : 0;
+        const fast = ok && elapsed <= limit * FAST_RATIO;
         buttons.forEach((b, j) => {
           b.disabled = true;
           if (j === P.answer) b.classList.add('correct');
@@ -668,13 +681,15 @@
         const fb = c.querySelector('.feedback');
         fb.innerHTML = `
           <div class="verdict ${ok ? 'ok' : 'bad'}">${ok ? '정답! 🎉' : i === -1 ? '⏰ 시간 초과!' : '오답 😢'}</div>
+          ${ok ? `<div class="bonus">⏱ ${sec}초 · <b>+${pts}점</b> <span class="muted">(${L.label} ${L.pts} + 속도 ${speed})</span>
+            ${fast ? `<div class="fast">⚡ 빠른 정답! 이번 행동 강화: ${ACTIONS[S.pendingKey] ? ACTIONS[S.pendingKey].fast : ''}</div>` : ''}</div>` : ''}
           <div class="explain">💡 ${tex(P.explain)}</div>
           <button class="primary big" id="qNext">${ok ? '행동 실행 ▶' : '턴 종료 ▶'}</button>`;
         fb.classList.remove('hidden');
         const next = fb.querySelector('#qNext');
         next.focus();
         S.keyHandler = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); next.click(); } };
-        next.onclick = () => { closeModal(); resolve({ ok, topic: P.topic, timeout: i === -1 }); };
+        next.onclick = () => { closeModal(); resolve({ ok, topic: P.topic, timeout: i === -1, fast, pts, sec }); };
       };
 
       buttons.forEach((b, i) => { b.onclick = () => finish(i); });
@@ -699,21 +714,21 @@
     });
   }
 
-  async function perform(key, level, dist) {
+  async function perform(key, level, dist, fast) {
     const p = cur();
     renderGuide();
-    if (key === 'aim') await doAim(p, level);
-    else if (key === 'scatter') await doScatter(p, level);
+    if (key === 'aim') await doAim(p, level, fast);
+    else if (key === 'scatter') await doScatter(p, level, fast);
     else if (key === 'move') await doMove(p, dist);
-    else if (key === 'box') await doBox(p, level);
+    else if (key === 'box') await doBox(p, level, fast);
     await sleep(400);
   }
 
   // ------------------------------------------------------------------
   //  피해 처리
   // ------------------------------------------------------------------
-  function takeShotDamage(p, level, key) {
-    let dmg = ACTIONS[key].dmg[level];
+  function takeShotDamage(p, level, key, fast) {
+    let dmg = ACTIONS[key].dmg[level] + (fast ? FAST_DMG : 0);
     if (p.power) {
       dmg *= 2;
       p.power = false;
@@ -759,8 +774,8 @@
     }
   }
 
-  async function doAim(p, level) {
-    const dmg = takeShotDamage(p, level, 'aim');
+  async function doAim(p, level, fast) {
+    const dmg = takeShotDamage(p, level, 'aim', fast);
     const { end, hit } = traceAim(p);
     toast(`🎯 ${DIR_NAMES[p.dir]} 방향 사격!`);
     await animatePath([[p.x + 0.5, p.y + 0.5], end], p.color, 13);
@@ -809,8 +824,8 @@
     return { pts, hits };
   }
 
-  async function doScatter(p, level) {
-    const dmg = takeShotDamage(p, level, 'scatter');
+  async function doScatter(p, level, fast) {
+    const dmg = takeShotDamage(p, level, 'scatter', fast);
     let tx, ty;
     do { tx = rand(N); ty = rand(N); } while (tx === p.x && ty === p.y);
     // 목표 좌표 표시
@@ -929,8 +944,8 @@
     return pool[pool.length - 1];
   }
 
-  async function doBox(p, level) {
-    const pool = BOX.filter(b => !(level === 'hard' && b.bad));
+  async function doBox(p, level, fast) {
+    const pool = BOX.filter(b => !((level === 'hard' || fast) && b.bad));
     const res = weighted(pool);
     const c = openModal(`
       <h2>🎁 랜덤박스</h2>
@@ -1051,7 +1066,7 @@
   function snapshot() {
     return {
       t: S.turn, r: S.round, x: S.extraActive ? 1 : 0,
-      p: S.players.map(p => [p.x, p.y, p.dir, p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries]),
+      p: S.players.map(p => [p.x, p.y, p.dir, p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries, p.score]),
     };
   }
   function loadSnapshot(b) {
@@ -1065,7 +1080,7 @@
       if (!p || !Array.isArray(a)) return;
       p.x = int(a[0], 0, N - 1); p.y = int(a[1], 0, N - 1); p.dir = int(a[2], 0, 7);
       p.hp = int(a[3], 0, MAX_HP); p.alive = !!a[4] && p.hp > 0; p.shield = !!a[5]; p.power = !!a[6];
-      p.correct = int(a[7], 0, 9999); p.tries = int(a[8], 0, 9999);
+      p.correct = int(a[7], 0, 9999); p.tries = int(a[8], 0, 9999); p.score = int(a[9], 0, 1e7);
     });
   }
   /** 다른 사람이 보낸 act 는 믿지 않고 형식을 맞춘다 */
@@ -1078,7 +1093,10 @@
       act.ok = !!a.ok;
       act.to = a.to ? 1 : 0;
       act.topic = cleanText(a.topic, 24);
-      if (a.key === 'move') act.dist = int(a.dist, 1, ACTIONS.move.max[act.level]);
+      act.fast = act.ok && a.fast ? 1 : 0;
+      act.pts = act.ok ? int(a.pts, 0, LEVELS[act.level].pts + 100) : 0;
+      act.sec = int(Number(a.sec) * 10, 0, 9999) / 10;
+      if (a.key === 'move') act.dist = int(a.dist, 1, ACTIONS.move.max[act.level] + act.fast);
     }
     return act;
   }
@@ -1563,7 +1581,9 @@
         <h3>턴 진행</h3>
         <ul>
           <li>차례가 되면 기기를 넘겨받고 <b>시작</b>을 누르세요. 카메라가 내 말의 시점(바라보는 방향이 화면 위쪽)으로 이동합니다.</li>
-          <li>행동을 고르고 <b>기본(고3)</b> 또는 <b>심화(대학 기초)</b> 문제를 풉니다. 맞히면 행동 실행, 틀리면 턴 종료.</li>
+          <li>행동을 고르고 <b>기본</b> 또는 <b>심화(수능 킬러 유형)</b> 문제를 풉니다. 맞히면 행동 실행, 틀리면 턴 종료.</li>
+          <li><b>점수</b>: 정답마다 기본 100점 / 심화 200점 + 속도 보너스(남은 시간 비율 × 최대 100점). 결과 화면에 점수 순위가 나와요.</li>
+          <li><b>⚡ 빠른 정답</b>: 제한 시간의 1/3 안에 맞히면 이번 행동 강화 (사격 피해 +10, 이동 최대 +1칸, 랜덤박스 꽝 없음).</li>
           <li><b>시점 전환</b>은 무료입니다. 원하는 만큼 방향을 돌린 뒤 다른 행동을 고르세요.</li>
         </ul>
         <h3>온라인 사설방</h3>
@@ -1584,7 +1604,7 @@
         <h3>문제 범위</h3>
         <ul>
           <li><b>기본</b>: 미분계수, 극한, 합성함수·곱·로그 미분, 이계도함수, 정적분, 극값, 접선, 삼각함수 합성</li>
-          <li><b>심화</b>: 편미분, 혼합 편도함수, 기울기·방향도함수, 라플라시안, 다변수 연쇄법칙, 열·파동·라플라스 방정식, PDE 분류/계수/선형성, 수송방정식, 로피탈, 테일러, 이중적분, 야코비안</li>
+          <li><b>심화</b>: 미정계수 극한, 역함수·음함수·매개변수 미분, 정적분으로 정의된 함수, e의 정의, 등비급수, 수열의 극한, 넓이, 치환·부분적분, 변곡점, 삼각함수의 극한, 미분가능성</li>
         </ul>
         <h3>단축키</h3>
         <ul><li>문제: 1~4 · 난이도: 1/2 · 시점 전환: ← → · 전체 보기: V</li></ul>

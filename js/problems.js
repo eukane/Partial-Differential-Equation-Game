@@ -1,7 +1,8 @@
 /*
  * 수학 문제 생성기
- *  - easy : 고3 미적분 수준 (미분계수, 극한, 합성함수/곱의 미분, 정적분, 극값 …)
- *  - hard : 대학 기초 (편미분, 기울기, 방향도함수, 라플라시안, 열/파동 방정식, PDE 분류 …)
+ *  - easy : 고3 기본 (미분계수, 극한, 합성함수/곱의 미분, 정적분, 극값 …)
+ *  - hard : 고3 심화 · 수능 미적분 킬러 유형 (미정계수, 역함수/음함수/매개변수 미분,
+ *           정적분으로 정의된 함수, 급수, 넓이, 치환/부분적분, 변곡점, 미분가능성 …)
  * 모든 문제는 매번 숫자가 바뀌는 무작위 생성형이며 4지선다로 출제된다.
  * 문자열 안의 $...$ 구간은 TeX 수식으로 렌더링된다.
  */
@@ -188,218 +189,168 @@
   ];
 
   // =====================================================================
-  //  심화 (대학 기초: 편미분 · 다변수 · PDE)
+  //  심화 (고3 상위권: 수능 미적분 킬러 유형)
   // =====================================================================
   const HARD = [
-    function partialX() {
-      const a = ri(1, 3), b = nz(-2, 2), c = ri(-3, 3), p = nz(-2, 2), q = nz(-2, 2);
-      const f = poly([[a, 'x^2y'], [b, 'xy^3'], [c, 'y']]);
-      const ans = 2 * a * p * q + b * q ** 3;
-      const fy = a * p * p + 3 * b * p * q * q + c;
-      return num('편미분',
-        `$f(x,y) = ${f}$ 일 때, $\\dfrac{\\partial f}{\\partial x}(${p},\\ ${q})$ 의 값은?`, ans,
-        [fy, a * p * q + b * q ** 3, 2 * a * p * q + 3 * b * q * q, 2 * a * p + b * q ** 3],
-        `$f_x = ${poly([[2 * a, 'xy'], [b, 'y^3']])}$ ($y$는 상수 취급) → $f_x(${p}, ${q}) = ${ans}$`);
+    function undeterminedLimit() {
+      // lim_{x→a} (x² + bx + c)/(x − a) = k  →  분자 = (x − a)(x + m), a + m = k
+      const a = ri(1, 3), k = ri(a + 1, a + 5);
+      const m = k - a;
+      const b = m - a, c = -a * m;
+      const ans = b + c;
+      return num('미정계수 극한',
+        `$\\displaystyle\\lim_{x \\to ${a}} \\frac{x^2 + bx + c}{x - ${a}} = ${k}$ 일 때, $b + c$ 의 값은?`, ans,
+        [b - c, b * c, b, c, k - a],
+        `분모 $\\to 0$ 이므로 분자도 $x = ${a}$ 에서 $0$. 분자 $= (x - ${a})(x + p)$ 로 두면 극한값은 $${a} + p = ${k}$ → $p = ${m}$. `
+        + `$(x - ${a})(x${signed(m)}) = x^2${tail([[b, 'x'], [c, '']])}$ 이므로 $b + c = ${ans}$`);
     },
 
-    function partialY() {
-      const a = ri(1, 3), b = nz(-2, 2), c = nz(-3, 3), p = nz(-2, 2), q = nz(-2, 2);
-      const f = poly([[a, 'x^2y'], [b, 'xy^3'], [c, 'y']]);
-      const ans = a * p * p + 3 * b * p * q * q + c;
-      const fx = 2 * a * p * q + b * q ** 3;
-      return num('편미분',
-        `$f(x,y) = ${f}$ 일 때, $\\dfrac{\\partial f}{\\partial y}(${p},\\ ${q})$ 의 값은?`, ans,
-        [fx, a * p * p + b * p * q * q + c, a * p * p + 3 * b * p * q * q, 3 * b * p * q * q + c],
-        `$f_y = ${poly([[a, 'x^2'], [3 * b, 'xy^2'], [c, '']])}$ ($x$는 상수 취급) → $f_y(${p}, ${q}) = ${ans}$`);
+    function inverseDeriv() {
+      // f(x) = x³ + ax + b, g = f⁻¹,  g'(f(t)) = 1 / f'(t)
+      const a = ri(1, 4), b = ri(-3, 3), t = pick([1, 2, -1]);
+      const v = t ** 3 + a * t + b;
+      const fp = 3 * t * t + a;
+      return build('역함수의 미분',
+        `$f(x) = x^3${tail([[a, 'x'], [b, '']])}$ 의 역함수를 $g(x)$ 라 할 때, $g'(${v})$ 의 값은?`,
+        T(frac(1, fp)),
+        [String(fp), frac(1, 3 * v * v + a), frac(1, 3 * t + a), frac(1, a), frac(-1, fp), frac(2, fp)].map(T),
+        `$f(${t}) = ${v}$ 이므로 $g(${v}) = ${t}$. $g'(${v}) = \\dfrac{1}{f'(${t})} = \\dfrac{1}{3\\cdot ${t * t} + ${a}} = ${frac(1, fp)}$`);
     },
 
-    function mixed() {
-      const m = ri(1, 3), n = ri(2, 3);
-      const ans = m * n * 2 ** (n - 1);
-      return num('혼합 편도함수',
-        `$f(x,y) = ${pw('x', m)}${pw('y', n)}$ 일 때, $f_{xy}(1,\\ 2)$ 의 값은?`, ans,
-        [m * n, m * n * 2 ** n, m * 2 ** (n - 1), n * 2 ** (n - 1), m * n * (n - 1)],
-        `$f_{xy} = ${m * n}${pw('x', m - 1)}${pw('y', n - 1)}$ → $f_{xy}(1, 2) = ${ans}$`);
+    function integralDefined() {
+      // ∫_1^x f(t) dt = x³ + ax² + bx  (모든 x) → x = 1 대입해 b, 미분해 f
+      const a = ri(-3, 3), k = pick([2, 3, -1]);
+      const b = -1 - a;
+      const ans = 3 * k * k + 2 * a * k + b;
+      return num('정적분으로 정의된 함수',
+        `모든 실수 $x$ 에 대하여 $\\displaystyle\\int_1^x f(t)\\,dt = x^3${tail([[a, 'x^2']])} + bx$ 일 때, $f(${k})$ 의 값은?`, ans,
+        [3 * k * k + 2 * a * k, 3 * k * k + 2 * a * k + 1 + a, k ** 3 + a * k * k + b * k, 3 * k * k + a * k + b],
+        `$x = 1$ 대입: $0 = 1${signed(a)} + b$ → $b = ${b}$. 양변 미분: $f(x) = 3x^2${tail([[2 * a, 'x'], [b, '']])}$ → $f(${k}) = ${ans}$`);
     },
 
-    function gradient() {
-      const [p, q, r] = pick([[3, 4, 5], [4, 3, 5], [6, 8, 10], [8, 6, 10], [5, 12, 13], [12, 5, 13]]);
-      if (Math.random() < 0.5) {
-        return num('기울기 벡터',
-          `$f(x,y) = x^2 + y^2$ 의 점 $(${p},\\ ${q})$ 에서 $|\\nabla f|$ 의 값은?`, 2 * r,
-          [r, p + q, 2 * (p + q), r * r, 4 * r],
-          `$\\nabla f = (2x,\\ 2y) = (${2 * p},\\ ${2 * q})$ → $|\\nabla f| = ${2 * r}$`);
-      }
-      const c = ri(-5, 5);
-      return num('기울기 벡터',
-        `$f(x,y) = ${poly([[p, 'x'], [q, 'y'], [c, '']])}$ 에 대하여 $|\\nabla f|$ 의 값은?`, r,
-        [p + q, r * r, p * q, 2 * r, r + 1],
-        `$\\nabla f = (${p},\\ ${q})$ → $|\\nabla f| = \\sqrt{${p * p} + ${q * q}} = ${r}$`);
-    },
-
-    function directional() {
-      const a = ri(1, 3), b = ri(1, 4);
-      const [u1, u2] = pick([[3, 4], [4, 3]]);
-      const ans = frac(2 * a * u1 + b * u2, 5);
-      return build('방향도함수',
-        `$f(x,y) = ${cx(a)}x^2 + ${cx(b)}y$ 의 점 $(1,\\ 1)$ 에서 단위벡터 $\\mathbf{u} = \\left(\\tfrac{${u1}}{5},\\ \\tfrac{${u2}}{5}\\right)$ 방향의 방향도함수 값은?`,
+    function implicitDeriv() {
+      // x² + axy + y² = C 위의 점 (p, q) 에서 dy/dx = −(2x + ay)/(ax + 2y)
+      let a, p, q, den;
+      do { a = nz(-3, 3); p = nz(-2, 2); q = nz(-2, 2); den = a * p + 2 * q; } while (den === 0 || 2 * p + a * q === 0);
+      const C = p * p + a * p * q + q * q;
+      const numr = -(2 * p + a * q);
+      const ans = frac(numr, den);
+      return build('음함수의 미분',
+        `곡선 $x^2${tail([[a, 'xy']])} + y^2 = ${C}$ 위의 점 $(${p},\\ ${q})$ 에서의 접선의 기울기는?`,
         T(ans),
-        [frac(2 * a * u2 + b * u1, 5), String(2 * a + b), frac(a * u1 + b * u2, 5), frac(2 * a * u1 + b * u2, 25), String(2 * a * u1 + b * u2), frac(2 * a * u1 + b * u2 + 1, 5)].map(T),
-        `$\\nabla f(1,1) = (${2 * a},\\ ${b})$, $D_{\\mathbf u} f = \\nabla f \\cdot \\mathbf u = \\dfrac{${2 * a}\\cdot ${u1} + ${b}\\cdot ${u2}}{5} = ${ans}$`);
+        [frac(-numr, den), frac(den, numr), frac(-den, numr), frac(-2 * p, 2 * q), frac(numr, den + 1), frac(numr - 1, den)].map(T),
+        `양변을 $x$ 로 미분해 $\\dfrac{dy}{dx}$ 로 정리하면 $\\dfrac{dy}{dx} = -\\dfrac{2x${tail([[a, 'y']])}}{${cx(a)}x + 2y}$, 점 $(${p}, ${q})$ 대입 → $${ans}$`);
     },
 
-    function laplacian() {
-      const a = ri(1, 2), b = nz(-3, 3), c = ri(1, 3), p = ri(-2, 2);
-      const f = poly([[a, 'x^3'], [b, 'y^2'], [c, 'xy']]);
-      const ans = 6 * a * p + 2 * b;
-      return num('라플라시안',
-        `$f(x,y) = ${f}$ 에 대해 $\\nabla^2 f = f_{xx} + f_{yy}$ 의 점 $(${p},\\ 1)$ 에서의 값은?`, ans,
-        [ans + 2 * c, 3 * a * p * p + 2 * b, 6 * a * p + b, ans + c, 2 * b - 6 * a * p],
-        `$f_{xx} = ${6 * a}x$, $f_{yy} = ${2 * b}$ ($xy$ 항은 두 번 미분하면 사라짐) → $${6 * a}\\cdot(${p})${signed(2 * b)} = ${ans}$`);
+    function parametricDeriv() {
+      let a, b, k;
+      do { a = ri(-3, 3); b = ri(-3, 3); k = pick([1, 2, -1]); } while (2 * k + a === 0 || 3 * k * k + b === 0);
+      const top = 3 * k * k + b, bot = 2 * k + a;
+      const ans = frac(top, bot);
+      return build('매개변수 미분',
+        `$x = t^2${tail([[a, 't']])},\\ y = t^3${tail([[b, 't']])}$ 일 때, $t = ${k}$ 에서 $\\dfrac{dy}{dx}$ 의 값은?`,
+        T(ans),
+        [frac(bot, top), frac(-top, bot), frac(6 * k, 2), frac(top, bot + 1), frac(top + 1, bot), String(top * bot)].map(T),
+        `$\\dfrac{dx}{dt} = 2t${signed(a)}$, $\\dfrac{dy}{dt} = 3t^2${signed(b)}$ → $\\dfrac{dy}{dx} = \\dfrac{${top}}{${bot}} = ${ans}$`);
     },
 
-    function heat() {
-      const b = ri(2, 4), al = pick([1, 1, 2, 3]);
-      const ans = al * b * b;
-      const eq = al === 1 ? 'u_t = u_{xx}' : `u_t = ${al}u_{xx}`;
-      return num('열방정식',
-        `$u(x,t) = e^{-kt}\\sin ${b}x$ 가 열방정식 $${eq}$ 을 만족하려면 상수 $k$ 는?`, ans,
-        [al * b, b * b, al * al * b * b, -ans, 2 * al * b, b],
-        `$u_t = -k\\,u$, $u_{xx} = -${b * b}\\,u$ → $-k = -${al === 1 ? '' : al + '\\cdot '}${b * b}$ → $k = ${ans}$`);
-    },
-
-    function wave() {
-      const a = ri(2, 3), b = ri(1, 3);
-      const ans = a * b;
-      return num('파동방정식',
-        `$u(x,t) = \\sin(${cx(b)}x - ct)$ 가 파동방정식 $u_{tt} = ${a * a}u_{xx}$ 를 만족할 때, 양수 $c$ 의 값은?`, ans,
-        [a * a * b, a * b * b, a * a * b * b, a + b, a, b],
-        `$u_{tt} = -c^2 u$, $u_{xx} = -${cx(b * b)}u$ → $c^2 = ${a * a}\\cdot ${b * b}$ → $c = ${ans}$`);
-    },
-
-    function classify() {
-      const cls = pick(['타원형', '포물형', '쌍곡형']);
-      let A, B, C, D;
-      if (cls === '포물형') {
-        const m = ri(1, 2), n = ri(1, 2), s = pick([1, -1]);
-        A = s * m * m; C = s * n * n; B = pick([1, -1]) * 2 * m * n * s;
-      } else {
-        do {
-          A = nz(-3, 3); B = ri(-4, 4); C = nz(-3, 3);
-          D = B * B - 4 * A * C;
-        } while (cls === '타원형' ? D >= 0 : D <= 0);
-      }
-      D = B * B - 4 * A * C;
-      const eq = poly([[A, 'u_{xx}'], [B, 'u_{xy}'], [C, 'u_{yy}']]) + ' = 0';
-      return build('PDE 분류',
-        `2계 편미분방정식 $${eq}$ 의 유형은?`,
-        cls,
-        shuffle(['타원형', '포물형', '쌍곡형', '판정할 수 없음']),
-        `$Au_{xx} + Bu_{xy} + Cu_{yy} = 0$ 에서 판별식 $B^2 - 4AC = ${B * B} - 4\\cdot(${A})\\cdot(${C}) = ${D}$ → ${D < 0 ? '음수이므로 타원형' : D === 0 ? '0이므로 포물형' : '양수이므로 쌍곡형'}`);
-    },
-
-    function orderLinear() {
-      const [eq, ans, why] = pick([
-        ['u_t + u\\,u_x = 0', '1계 비선형', '$u\\,u_x$ 항이 비선형 (버거스 방정식)'],
-        ['u_{tt} = 4u_{xx}', '2계 선형', '파동방정식은 2계 선형'],
-        ['u_t = u_{xxx} + u_x', '3계 선형', '최고계 도함수 $u_{xxx}$, 모든 항이 1차'],
-        ['(u_x)^2 + (u_y)^2 = 1', '1계 비선형', '도함수의 제곱 항 (아이코날 방정식)'],
-        ['u_x + 3u_y = 0', '1계 선형', '1계 도함수만 1차로 등장'],
-        ['u_{xx} + u_{yy} = \\sin u', '2계 비선형', '$\\sin u$ 가 $u$ 에 대해 비선형'],
-        ['u_t = u_{xx} + x^2 u', '2계 선형', '계수 $x^2$ 는 독립변수 함수라 선형성 유지'],
-        ['u_t + u_{xxx} + 6u\\,u_x = 0', '3계 비선형', 'KdV 방정식: $u\\,u_x$ 항이 비선형'],
-        ['x\\,u_x + y\\,u_y = u', '1계 선형', '계수가 $x, y$ 에만 의존 → 선형'],
+    function eLimit() {
+      const a = ri(1, 3), b = ri(2, 4);
+      const e = n => (n === 1 ? 'e' : `e^{${n}}`);
+      const form = pick([
+        [`\\displaystyle\\lim_{x \\to 0} (1 + ${a}x)^{\\frac{${b}}{x}}`, `$(1 + ${a}x)^{\\frac{1}{${a}x}} \\to e$ 이므로 지수 $\\frac{${b}}{x} = ${a * b}\\cdot\\frac{1}{${a}x}$ →`],
+        [`\\displaystyle\\lim_{n \\to \\infty} \\left(1 + \\frac{${a}}{n}\\right)^{${b}n}`, `$\\left(1 + \\frac{${a}}{n}\\right)^{\\frac{n}{${a}}} \\to e$ 이므로 지수 $${b}n = ${a * b}\\cdot\\frac{n}{${a}}$ →`],
       ]);
-      return build('PDE 계수·선형성',
-        `편미분방정식 $${eq}$ 의 계수(order)와 선형성은?`,
-        ans,
-        shuffle(['1계 선형', '1계 비선형', '2계 선형', '2계 비선형', '3계 선형', '3계 비선형']),
-        `${why} → ${ans}`);
+      return build('e 의 정의',
+        `$${form[0]}$ 의 값은?`,
+        T(e(a * b)),
+        [e(a + b), `e^{${frac(a, b)}}`, `e^{${frac(b, a)}}`, e(2 * a * b), String(a * b), `e^{${a * b}} - 1`].map(T),
+        `${form[1]} $${e(a * b)}$`);
     },
 
-    function harmonic() {
-      const [g, why] = pick([
-        ['x^2 - y^2', '$u_{xx} = 2,\\ u_{yy} = -2$'],
-        ['xy', '$u_{xx} = u_{yy} = 0$'],
-        ['e^x\\cos y', '$u_{xx} = e^x\\cos y,\\ u_{yy} = -e^x\\cos y$'],
-        ['e^x\\sin y', '$u_{xx} = e^x\\sin y,\\ u_{yy} = -e^x\\sin y$'],
-        ['x^3 - 3xy^2', '$u_{xx} = 6x,\\ u_{yy} = -6x$'],
-      ]);
-      const bads = shuffle(['x^2 + y^2', 'x^2y', 'e^{x+y}', '\\sin x\\sin y', 'x^3 + y^3', 'xy^2']);
-      return build('라플라스 방정식',
-        `다음 중 라플라스 방정식 $u_{xx} + u_{yy} = 0$ 을 만족하는 함수는?`,
-        T(`u = ${g}`),
-        bads.map(b => T(`u = ${b}`)),
-        `${why} → 합이 $0$ 이므로 조화함수`);
-    },
-
-    function chainMulti() {
-      const m = ri(1, 3), n = ri(1, 3);
-      const ans = m + 2 * n;
-      return num('다변수 연쇄법칙',
-        `$z = ${pw('x', m)}${pw('y', n)}$, $x = t$, $y = t^2$ 일 때 $t = 1$ 에서 $\\dfrac{dz}{dt}$ 의 값은?`, ans,
-        [m + n, m * n, 2 * m * n, 2 * m + n, ans + 1],
-        `$\\dfrac{dz}{dt} = z_x\\dfrac{dx}{dt} + z_y\\dfrac{dy}{dt} = z_x + 2t\\,z_y$, $t = 1$ 이면 $x = y = 1$: $${m} + 2\\cdot ${n} = ${ans}$`);
-    },
-
-    function lhopital() {
-      const a = ri(1, 4);
-      const ans = frac(a * a, 2);
-      return build('로피탈 정리',
-        `$\\displaystyle\\lim_{x \\to 0} \\frac{1 - \\cos ${cx(a)}x}{x^2}$ 의 값은?`,
+    function geometricSeries() {
+      const c = ri(4, 7);
+      const ans = frac(2 * (c - 3) + 3 * (c - 2), (c - 2) * (c - 3));
+      return build('등비급수',
+        `$\\displaystyle\\sum_{n=1}^{\\infty} \\frac{2^n + 3^n}{${c}^n}$ 의 값은?`,
         T(ans),
-        [frac(a, 2), String(a * a), frac(a * a, 4), '0', String(2 * a * a), frac(1, 2), '1'].map(T),
-        `로피탈 두 번: $\\dfrac{${cx(a)}\\sin ${cx(a)}x}{2x} \\to \\dfrac{${a * a}\\cos ${cx(a)}x}{2} \\to ${ans}$`);
+        [frac(c * (c - 3) + c * (c - 2), (c - 2) * (c - 3)), frac(2, c - 2), frac(3, c - 3), frac(5, c - 5 > 0 ? c - 5 : c), frac(2 * (c - 3) + 3 * (c - 2) + 1, (c - 2) * (c - 3))].map(T),
+        `첫째항 $\\frac{2}{${c}}$, 공비 $\\frac{2}{${c}}$ 인 급수의 합 $\\frac{2}{${c - 2}}$ 와 첫째항 $\\frac{3}{${c}}$, 공비 $\\frac{3}{${c}}$ 인 급수의 합 $\\frac{3}{${c - 3}}$ 을 더하면 $${ans}$`);
     },
 
-    function taylor() {
-      const a = ri(1, 3), n = ri(2, 3);
-      const fact = n === 2 ? 2 : 6;
-      const ans = frac(a ** n, fact);
-      return build('테일러 급수',
-        `$e^{${cx(a)}x}$ 의 매클로린 급수에서 $x^{${n}}$ 의 계수는?`,
+    function sqrtSeqLimit() {
+      let a, b;
+      do { a = ri(1, 8); b = ri(-4, 6); } while (a === b);
+      const ans = frac(a - b, 2);
+      const inner = (k) => `n^2${tail([[k, 'n']])}`;
+      return build('수열의 극한',
+        `$\\displaystyle\\lim_{n \\to \\infty} \\left(\\sqrt{${inner(a)}} - \\sqrt{${inner(b)}}\\right)$ 의 값은?`,
         T(ans),
-        [frac(a ** n, n), frac(a, fact), String(a ** n), frac(a ** (n - 1), fact), frac(a ** n, fact * 2), frac(a ** n + 1, fact), frac(a ** n, fact + 1), String(fact)].map(T),
-        `$e^{u} = \\sum_k \\dfrac{u^k}{k!}$, $u = ${cx(a)}x$ → $\\dfrac{${a}^{${n}}}{${n}!} = ${ans}$`);
+        [frac(a + b, 2), String(a - b), '0', frac(a - b, 4), frac(b - a, 2), '1'].map(T),
+        `분자를 유리화: $\\dfrac{${a - b}n}{\\sqrt{${inner(a)}} + \\sqrt{${inner(b)}}} \\to \\dfrac{${a - b}}{1 + 1} = ${ans}$`);
     },
 
-    function doubleInt() {
-      const a = ri(1, 3), b = ri(1, 3);
-      const ans = frac(a * a * b * b, 4);
-      return build('이중적분',
-        `$\\displaystyle\\int_0^{${a}}\\!\\!\\int_0^{${b}} xy\\,dy\\,dx$ 의 값은?`,
+    function areaBetween() {
+      const k = ri(1, 4), m = pick([1, 2]);
+      // y = m x² 와 y = k x 사이 넓이: 교점 x = k/m,  ∫ (kx − mx²) = k³ / (6m²)
+      const ans = frac(k ** 3, 6 * m * m);
+      return build('정적분과 넓이',
+        `곡선 $y = ${cx(m)}x^2$ 과 직선 $y = ${cx(k)}x$ 로 둘러싸인 부분의 넓이는?`,
         T(ans),
-        [frac(a * b, 4), frac(a * a * b * b, 2), String(a * a * b * b), frac(a * b, 2), frac(a * a * b * b, 8), frac(a * a * b * b + 1, 4)].map(T),
-        `$\\displaystyle\\int_0^{${a}} x\\,dx \\cdot \\int_0^{${b}} y\\,dy = \\frac{${a * a}}{2}\\cdot\\frac{${b * b}}{2} = ${ans}$`);
+        [frac(k ** 3, 3 * m * m), frac(k ** 3, 2 * m * m), frac(k * k, 6 * m), frac(k ** 3, 12 * m * m), frac(k ** 3, 6 * m), frac(k ** 3 + 1, 6 * m * m)].map(T),
+        `교점 $x = 0,\\ ${frac(k, m)}$. $\\displaystyle\\int_0^{${frac(k, m)}} (${cx(k)}x - ${cx(m)}x^2)\\,dx = ${ans}$ (공식 $\\frac{|a|}{6}(\\beta - \\alpha)^3$)`);
+    },
+
+    function substitution() {
+      const n = ri(1, 3);
+      const ans = frac(2 ** (n + 1) - 1, 2 * (n + 1));
+      return build('치환적분',
+        `$\\displaystyle\\int_0^1 x(x^2 + 1)^{${n}}\\,dx$ 의 값은?`,
+        T(ans),
+        [frac(2 ** (n + 1) - 1, n + 1), frac(2 ** (n + 1), 2 * (n + 1)), frac(2 ** n - 1, 2 * n), frac(2 ** (n + 1) - 1, 4 * (n + 1)), frac(2 ** (n + 1) + 1, 2 * (n + 1))].map(T),
+        `$u = x^2 + 1$, $du = 2x\\,dx$: $\\displaystyle\\frac{1}{2}\\int_1^2 u^{${n}}\\,du = \\frac{1}{2}\\cdot\\frac{2^{${n + 1}} - 1}{${n + 1}} = ${ans}$`);
     },
 
     function byParts() {
       const [q, ans, wrongs, why] = pick([
-        ['\\int_0^1 x e^x\\,dx', '1', ['e', 'e - 1', '2', '0'], '$\\left[xe^x - e^x\\right]_0^1 = 0 - (-1) = 1$'],
-        ['\\int_0^{\\pi} x\\sin x\\,dx', '\\pi', ['2', '0', '-\\pi', '2\\pi'], '$\\left[-x\\cos x + \\sin x\\right]_0^{\\pi} = \\pi$'],
-        ['\\int_1^{e} \\ln x\\,dx', '1', ['e', 'e - 1', '0', 'e + 1'], '$\\left[x\\ln x - x\\right]_1^{e} = 0 - (-1) = 1$'],
+        ['\\int_1^{e} x\\ln x\\,dx', '\\frac{e^2 + 1}{4}', ['\\frac{e^2 - 1}{4}', '\\frac{e^2 + 1}{2}', '\\frac{e^2}{4}', '\\frac{e^2 - 1}{2}'], '$\\left[\\frac{x^2}{2}\\ln x - \\frac{x^2}{4}\\right]_1^{e} = \\frac{e^2}{4} + \\frac{1}{4}$'],
+        ['\\int_0^{\\frac{\\pi}{2}} x\\cos x\\,dx', '\\frac{\\pi}{2} - 1', ['\\frac{\\pi}{2} + 1', '\\frac{\\pi}{2}', '1', '\\pi - 1'], '$\\left[x\\sin x + \\cos x\\right]_0^{\\frac{\\pi}{2}} = \\frac{\\pi}{2} - 1$'],
+        ['\\int_0^{1} x e^{x}\\,dx', '1', ['e - 1', 'e', '2', 'e - 2'], '$\\left[xe^x - e^x\\right]_0^1 = 0 - (-1) = 1$'],
+        ['\\int_1^{e} \\ln x\\,dx', '1', ['e - 1', 'e', '0', 'e + 1'], '$\\left[x\\ln x - x\\right]_1^{e} = 0 - (-1) = 1$'],
       ]);
-      return build('부분적분',
-        `$\\displaystyle ${q}$ 의 값은?`,
-        T(ans), shuffle(wrongs).map(T), `부분적분: ${why}`);
+      return build('부분적분', `$\\displaystyle ${q}$ 의 값은?`, T(ans), shuffle(wrongs).map(T), `부분적분: ${why}`);
     },
 
-    function jacobian() {
-      const k = ri(2, 5);
-      return build('야코비안',
-        `극좌표 $x = r\\cos\\theta,\\ y = r\\sin\\theta$ 에서 $\\left|\\dfrac{\\partial(x,y)}{\\partial(r,\\theta)}\\right|$ 의 $r = ${k}$ 에서의 값은?`,
-        T(String(k)),
-        [String(k * k), '1', frac(1, k), String(2 * k), '0'].map(T),
-        `$\\det\\begin{pmatrix}\\cos\\theta & -r\\sin\\theta \\\\ \\sin\\theta & r\\cos\\theta\\end{pmatrix} = r(\\cos^2\\theta + \\sin^2\\theta) = r = ${k}$`);
+    function inflection() {
+      // f = (x² + px)eˣ → f'' = (x² + (p+4)x + 2p + 2)eˣ, 판별식 p² + 8 > 0
+      const p = ri(-3, 3);
+      const ans = -(p + 4);
+      return num('변곡점',
+        `함수 $f(x) = (x^2${tail([[p, 'x']])})e^x$ 의 그래프의 두 변곡점의 $x$ 좌표의 합은?`, ans,
+        [-(p + 2), p + 4, 2 * p + 2, -(2 * p + 2), -p],
+        `$f'(x) = (x^2${tail([[p + 2, 'x'], [p, '']])})e^x$, $f''(x) = (x^2${tail([[p + 4, 'x'], [2 * p + 2, '']])})e^x$. `
+        + `판별식 $${p * p + 8} > 0$ 이고 부호가 바뀌므로 근과 계수의 관계로 합은 $${ans}$`);
     },
 
-    function transport() {
-      const a = ri(2, 4);
-      return build('1계 PDE (수송방정식)',
-        `편미분방정식 $u_x + ${a}u_y = 0$ 의 일반해는? ($f$ 는 임의의 미분가능 함수)`,
-        T(`u = f(y - ${a}x)`),
-        shuffle([`u = f(y + ${a}x)`, `u = f(x - ${a}y)`, `u = f(x + ${a}y)`, `u = f(${a}y - x)`]).map(T),
-        `$u = f(y - ${a}x)$ 이면 $u_x = -${a}f'$, $u_y = f'$ → $u_x + ${a}u_y = 0$ (특성선 $y - ${a}x =$ 상수)`);
+    function trigLimit() {
+      const a = ri(1, 4), b = ri(1, 3);
+      const ans = frac(a * a, 2 * b);
+      return build('삼각함수의 극한',
+        `$\\displaystyle\\lim_{x \\to 0} \\frac{1 - \\cos ${cx(a)}x}{x\\sin ${cx(b)}x}$ 의 값은?`,
+        T(ans),
+        [frac(a * a, b), frac(a, 2 * b), frac(a * a, 4 * b), frac(a, b), frac(b, a * a), '0'].map(T),
+        `$1 - \\cos ${cx(a)}x = 2\\sin^2\\frac{${cx(a)}x}{2} \\approx \\frac{${a * a}x^2}{2}$, $x\\sin ${cx(b)}x \\approx ${cx(b)}x^2$ → $${ans}$`);
+    },
+
+    function differentiable() {
+      // x<k: x² + ax + b,  x≥k: mx  가 x = k 에서 미분가능 → 2k + a = m, b = k²
+      const k = ri(1, 2), m = ri(3, 7);
+      const a = m - 2 * k, b = k * k;
+      const ans = a + b;
+      return num('미분가능성',
+        `함수 $f(x) = \\begin{cases} x^2 + ax + b & (x < ${k}) \\\\ ${m}x & (x \\ge ${k}) \\end{cases}$ 가 $x = ${k}$ 에서 미분가능할 때, $a + b$ 의 값은?`, ans,
+        [a - b, a, b, m + b, a * b],
+        `미분계수: $${2 * k} + a = ${m}$ → $a = ${a}$. 연속: $${k * k} + ${k}a + b = ${m * k}$ → $b = ${b}$. 따라서 $a + b = ${ans}$`);
     },
   ];
 
