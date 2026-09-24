@@ -1094,6 +1094,92 @@
     startOnlineTurn();
   }
 
+  /**
+   * 로그인 없이 쓰는 온라인 연결: 공개 MQTT 중계 서버(WebSocket)로 claude.ai room 과
+   * 같은 모양(presence / peers / onPeers)을 흉내 낸다. 각자의 presence 를
+   * pdeb1/<방코드>/p/<uid> 에 retained 로 올리고, 연결이 끊기면 last-will 로 지운다.
+   */
+  const BROKERS = [
+    { url: 'wss://public.cloud.shiftr.io', username: 'public', password: 'public' },
+    { url: 'wss://broker.hivemq.com:8884/mqtt' },
+  ];
+  function connectRelay(code, uid) {
+    const base = `pdeb1/${code}/p/`;
+    const myTopic = base + uid;
+    return new Promise((resolve, reject) => {
+      let i = 0;
+      const tryNext = () => {
+        if (i >= BROKERS.length) { reject(new Error('relay')); return; }
+        const b = BROKERS[i++];
+        const c = window.mqtt.connect(b.url, {
+          username: b.username, password: b.password,
+          clientId: 'pdeb_' + uid + '_' + Math.random().toString(36).slice(2, 7),
+          clean: true, connectTimeout: 6000, reconnectPeriod: 2000, keepalive: 20,
+          will: { topic: myTopic, payload: '', qos: 1, retain: true },
+        });
+        let ok = false;
+        const timer = setTimeout(() => { if (!ok) { c.end(true); tryNext(); } }, 7000);
+        c.on('error', () => {});
+        c.once('connect', () => {
+          ok = true;
+          clearTimeout(timer);
+          resolve(makeRelayRoom(c, base, myTopic, uid));
+        });
+      };
+      tryNext();
+    });
+  }
+  function makeRelayRoom(c, base, myTopic, uid) {
+    let me = {};
+    const others = new Map();
+    const handlers = [];
+    let cache = [];
+    let queued = false;
+    const rebuild = () => {
+      cache = Object.freeze([
+        { peer: uid, by: null, isMe: true, sameTab: true, kind: 'viewer', guest: false, presence: me, updatedAt: Date.now() },
+        ...[...others].map(([id, v]) => ({ peer: id, by: null, isMe: false, sameTab: false, kind: 'viewer', guest: false, presence: v.presence, updatedAt: v.at })),
+      ]);
+    };
+    const emit = () => {
+      rebuild();
+      if (queued) return;
+      queued = true;
+      setTimeout(() => { queued = false; handlers.forEach(h => h({ peers: cache, joined: [], left: [], updated: [] })); }, 0);
+    };
+    const push = () => c.publish(myTopic, JSON.stringify(me), { qos: 1, retain: true });
+    const sub = () => c.subscribe(base + '+', { qos: 1 });
+    sub();
+    c.on('connect', () => { sub(); if (Object.keys(me).length) push(); }); // 재연결
+    c.on('message', (topic, buf) => {
+      const id = topic.slice(base.length);
+      if (id === uid || !/^[A-Za-z0-9_-]{1,40}$/.test(id)) return;
+      const txt = buf.toString();
+      if (!txt) others.delete(id);
+      else {
+        try {
+          const v = JSON.parse(txt);
+          if (v && typeof v === 'object' && !Array.isArray(v)) others.set(id, { presence: Object.freeze(v), at: Date.now() });
+        } catch (e) { return; }
+      }
+      emit();
+    });
+    rebuild();
+    return {
+      presence(patch) {
+        const next = { ...me };
+        for (const k in patch) { if (patch[k] === null) delete next[k]; else next[k] = patch[k]; }
+        me = Object.freeze(next);
+        push();
+        emit();
+        return Promise.resolve();
+      },
+      peers: () => cache,
+      onPeers(fn) { handlers.push(fn); setTimeout(() => fn({ peers: cache, joined: [], left: [], updated: [] }), 0); return () => {}; },
+      close() { c.publish(myTopic, '', { qos: 1, retain: true }, () => c.end()); },
+    };
+  }
+
   const Net = {
     room: null,
     uid: null,       // 이 브라우저의 고유 키 (자리 찾기용)
@@ -1110,20 +1196,25 @@
       const hash = (location.hash || '').replace('#', '').toUpperCase();
       if (/^[A-Z0-9]{4}$/.test(hash)) $('#joinCode').value = hash;
 
-      if (!window.claude || typeof window.claude.use !== 'function') {
-        note.textContent = '온라인 방은 claude.ai 게임 링크에서 열었을 때만 쓸 수 있어요.';
+      let room = null, user = null;
+      if (window.claude && typeof window.claude.use === 'function') {
+        [room, user] = await Promise.all([window.claude.use('room'), window.claude.use('user')]);
+      }
+      if (room) {
+        // claude.ai 안에서 열린 경우: 플랫폼 room 사용
+        this.mode = 'claude';
+        this.room = room;
+        this.byId = user ? await user.id() : null;
+        room.onPeers(() => this.onPeers(), () => { this.room = null; if (S.online) toast('온라인 연결이 끊겼어요', 3000); });
+      } else if (window.mqtt && location.protocol.startsWith('http')) {
+        // 일반 웹 주소로 열린 경우: 공개 중계 서버 사용 (로그인 불필요)
+        this.mode = 'relay';
+      } else {
+        note.textContent = '온라인 방은 웹 주소(링크)로 열었을 때만 쓸 수 있어요. 한 기기 모드는 그대로 됩니다.';
         return;
       }
-      const [room, user] = await Promise.all([window.claude.use('room'), window.claude.use('user')]);
-      if (!room) {
-        note.textContent = '지금은 온라인 방에 연결할 수 없어요. 한 기기 모드는 그대로 쓸 수 있어요.';
-        return;
-      }
-      this.room = room;
-      this.byId = user ? await user.id() : null;
-      room.onPeers(() => this.onPeers(), () => { this.room = null; if (S.online) toast('온라인 연결이 끊겼어요', 3000); });
       $('#onlineForm').hidden = false;
-      note.textContent = '방을 만들고 초대 링크를 보내거나, 받은 방 코드로 참가하세요.';
+      note.textContent = '방을 만들고 초대 링크를 보내거나, 받은 방 코드로 참가하세요. 친구는 로그인 없이 링크만 열면 돼요.';
       $('#btnCreate').onclick = () => this.create();
       $('#btnJoin').onclick = () => this.join();
       $('#joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') this.join(); });
@@ -1138,6 +1229,27 @@
     },
 
     myKey() { return this.byId || this.uid; },
+    inviteLink(code) {
+      const here = location.href.split('#')[0];
+      return (this.mode === 'claude' ? INVITE_BASE : here) + '#' + code;
+    },
+    /** relay 모드는 방마다 따로 연결한다 */
+    async connect(code) {
+      if (this.mode !== 'relay') return true;
+      if (this.room && this.roomCode === code) return true;
+      if (this.room) { this.room.close(); this.room = null; }
+      toast('온라인 서버에 연결 중…', 6000);
+      try {
+        this.room = await connectRelay(code, this.uid);
+        this.roomCode = code;
+        this.room.onPeers(() => this.onPeers());
+        el.toast.classList.remove('show');
+        return true;
+      } catch (e) {
+        toast('온라인 서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도하세요.', 4000);
+        return false;
+      }
+    },
     keyOf(peer) { return peer.by || cleanText(peer.presence && peer.presence.uid, 40) || peer.peer; },
     peersInRoom() {
       if (!this.room || !S.online) return [];
@@ -1170,15 +1282,17 @@
     },
 
     // ---------- 방장 ----------
-    create() {
+    async create() {
       if (!this.readNick()) return;
       let code = '';
       for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+      if (!(await this.connect(code))) return;
       S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked };
       this.publish();
       showLobby();
     },
-    restore(h) {
+    async restore(h) {
+      if (!(await this.connect(h.code))) return;
       this.nick = cleanText(h.nick, 10) || '방장';
       const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
       if (!seats.length) return;
@@ -1238,10 +1352,11 @@
     },
 
     // ---------- 참가자 ----------
-    join() {
+    async join() {
       const code = cleanText($('#joinCode').value, 4).toUpperCase();
       if (!/^[A-Z0-9]{4}$/.test(code)) { $('#joinCode').focus(); toast('방 코드 4자리를 입력하세요'); return; }
       if (!this.readNick()) return;
+      if (!(await this.connect(code))) return;
       S.online = { code, host: false, seats: [], mySeat: -1, phase: 'joining', seq: -1, pending: null, timer: true };
       this.room.presence({ app: APP, room: code, role: 'guest', uid: this.uid, nick: this.nick, join: 1, req: null, doing: null })
         .catch(() => toast('방에 신호를 보내지 못했어요', 2500));
@@ -1369,6 +1484,7 @@
         this.room.presence({ app: null, room: null, role: null, seats: null, base: null, act: null, req: null, doing: null, join: null, ph: null, seq: null }).catch(() => {});
       }
       if (S.online && S.online.host) store.del(HOST_SAVE);
+      if (this.mode === 'relay' && this.room) { this.room.close(); this.room = null; this.roomCode = null; }
       S.online = null;
       closeModal();
       el.lobby.classList.add('hidden');
@@ -1391,7 +1507,7 @@
   function renderLobby(message) {
     const o = S.online;
     if (!o || o.phase === 'game') return;
-    const link = `${INVITE_BASE}#${o.code}`;
+    const link = Net.inviteLink(o.code);
     const seats = [0, 1, 2].map(i => {
       const x = o.seats[i];
       const pr = PRESETS[i];
@@ -1452,7 +1568,7 @@
         </ul>
         <h3>온라인 사설방</h3>
         <ul>
-          <li>방장이 <b>방 만들기</b>를 누르면 4자리 방 코드와 초대 링크가 나옵니다. 링크로 들어오면 코드가 자동으로 채워져요.</li>
+          <li>방장이 <b>방 만들기</b>를 누르면 4자리 방 코드와 초대 링크가 나옵니다. 친구는 로그인 없이 링크만 열면 되고, 코드가 자동으로 채워져요.</li>
           <li>2~3명이 모이면 방장이 시작합니다. 자리가 찬 뒤 들어온 사람은 관전합니다.</li>
           <li>각자 자기 기기에서 자기 차례에만 문제를 풉니다. 방장이 페이지를 닫으면 게임이 멈추고, 방장이 같은 기기에서 다시 열어 <b>진행 중이던 방 다시 열기</b>를 누르면 이어집니다.</li>
         </ul>

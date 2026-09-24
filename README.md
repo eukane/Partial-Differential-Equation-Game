@@ -13,17 +13,19 @@
 python3 -m http.server 8000   # → http://localhost:8000
 ```
 
-## 온라인 사설방
+## 온라인 사설방 (로그인 필요 없음)
 
-게임 링크(https://claude.ai/artifact/2E2sjbN9FEvtqU8FMwpNie)에서 열면 온라인으로도 할 수 있습니다.
+**게임 주소:** https://raw.githack.com/eukane/Partial-Differential-Equation-Game/claude/math-board-game-oeecqv/index.html
 
-1. 방장: 닉네임을 적고 **방 만들기** → 4자리 방 코드와 초대 링크가 나옵니다.
-2. 친구: 초대 링크로 들어오거나, 게임 페이지에서 방 코드를 입력하고 **참가**.
+1. 방장: 위 주소를 열고 닉네임을 적은 뒤 **방 만들기** → 4자리 방 코드와 초대 링크가 나옵니다.
+2. 친구: 초대 링크를 열면 코드가 자동으로 채워져 있습니다. 닉네임만 적고 **참가**. (계정·로그인 필요 없음)
 3. 2~3명이 모이면 방장이 **게임 시작**. 각자 자기 기기에서 자기 차례에 문제를 풉니다.
 
+- 통신은 공개 MQTT 중계 서버(`public.cloud.shiftr.io`, 실패 시 `broker.hivemq.com`)를 거칩니다. 공개 서버이므로 닉네임에 개인정보를 넣지 마세요.
 - 방장의 화면이 게임 상태의 기준입니다. 행동은 난수 seed와 함께 전달되어 모든 화면에서 같은 결과와 애니메이션이 재생됩니다.
-- 친구가 링크를 열려면 페이지 소유자가 공유(Share) 메뉴에서 친구를 초대해 두어야 합니다.
-- 로컬 파일(`index.html`)로 열면 한 기기 모드만 쓸 수 있습니다.
+- 방장이 페이지를 닫으면 게임이 멈춥니다. 같은 기기에서 다시 열어 **진행 중이던 방 다시 열기**를 누르면 이어집니다.
+- claude.ai 링크(https://claude.ai/artifact/2E2sjbN9FEvtqU8FMwpNie)에서 열면 claude.ai 자체의 실시간 기능을 씁니다 (이 경우 참가자도 claude.ai 로그인 필요).
+- 로컬 파일(`index.html`)을 더블클릭해서 열면 한 기기 모드만 됩니다.
 
 ## 게임 규칙
 
@@ -64,4 +66,5 @@ css/style.css     3D 보드, UI 스타일
 js/problems.js    수학 문제 생성기 (기본/심화)
 js/game.js        게임 로직 (턴, 카메라, 사격/반사/이동, 랜덤박스)
 vendor/katex/     수식 렌더링 (KaTeX, MIT)
+vendor/mqtt/      온라인 중계 서버 연결 (MQTT.js, MIT)
 ```
