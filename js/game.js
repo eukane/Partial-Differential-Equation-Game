@@ -28,7 +28,7 @@
   ];
 
   const ACTIONS = {
-    scatter: { icon: '🎲', name: '난사', sub: '랜덤 좌표로 발사 · 벽 3회 반사', easy: '피해 25', hard: '피해 35', dmg: { easy: 25, hard: 35 } },
+    scatter: { icon: '🎲', name: '난사', sub: '랜덤 좌표 · 벽 3회 반사 · 관통', easy: '피해 25', hard: '피해 35', dmg: { easy: 25, hard: 35 } },
     aim:     { icon: '🎯', name: '조준 사격', sub: '바라보는 방향으로 직선 발사', easy: '피해 20', hard: '피해 30', dmg: { easy: 20, hard: 30 } },
     rotate:  { icon: '🔄', name: '시점 전환', sub: '무료 · 문제 없음' },
     move:    { icon: '👣', name: '이동', sub: '바라보는 방향 · 벽에서 반사', easy: '1~3칸', hard: '1~5칸', max: { easy: 3, hard: 5 } },
@@ -312,8 +312,8 @@
     setTimeout(() => c.remove(), 700);
   }
 
-  /** 폴리라인 경로를 따라 탄환을 날린다 */
-  function animatePath(pts, color, speed = 11) {
+  /** 폴리라인 경로를 따라 탄환을 날린다. events: [{ d: 이동거리, fn }] 은 탄환이 d 지점을 지날 때 실행 */
+  function animatePath(pts, color, speed = 11, events = []) {
     return new Promise(resolve => {
       const line = svg('polyline', { class: 'shot', stroke: color, points: '' });
       const ball = svg('circle', { class: 'bullet', r: 0.15, fill: color });
@@ -348,6 +348,7 @@
         line.setAttribute('points', out.map(q => q.join(',')).join(' '));
         ball.setAttribute('cx', head[0]);
         ball.setAttribute('cy', head[1]);
+        for (const e of events) if (!e.done && e.d <= d) { e.done = true; e.fn(); }
         if (d < total) requestAnimationFrame(frame);
         else {
           ball.remove();
@@ -680,7 +681,8 @@
   }
 
   // ------------------------------------------------------------------
-  //  난사: 무작위 좌표를 향해 발사, 벽에 최대 3번 반사
+  //  난사: 무작위 좌표를 향해 발사, 벽에 3번 반사. 관통탄이라 맞혀도 사라지지 않고
+  //        경로상의 모든 플레이어에게 (한 발당 1인 1회) 피해를 준다.
   // ------------------------------------------------------------------
   function traceScatter(p, tx, ty) {
     let pos = [p.x + 0.5, p.y + 0.5];
@@ -688,32 +690,34 @@
     const len = Math.hypot(v[0], v[1]);
     v = [v[0] / len, v[1] / len];
     const pts = [pos];
+    const hits = [];
     const EPS = 1e-9;
+    let travelled = 0;
     for (let seg = 0; seg <= 3; seg++) {
       const tX = v[0] > EPS ? (N - pos[0]) / v[0] : v[0] < -EPS ? -pos[0] / v[0] : Infinity;
       const tY = v[1] > EPS ? (N - pos[1]) / v[1] : v[1] < -EPS ? -pos[1] / v[1] : Infinity;
       const t = Math.min(tX, tY);
-      // 이 구간에서 가장 먼저 스치는 플레이어
-      let best = null;
+      // 이 구간에서 스치는 플레이어들 (앞에서부터)
+      const found = [];
       for (const q of S.players) {
-        if (!q.alive || (seg === 0 && q === p)) continue;
+        if (!q.alive || (seg === 0 && q === p) || hits.some(h => h.q === q)) continue;
         const cx = q.x + 0.5 - pos[0], cy = q.y + 0.5 - pos[1];
         const s = cx * v[0] + cy * v[1];
         if (s < 0.05 || s > t) continue;
-        const dist = Math.hypot(cx - v[0] * s, cy - v[1] * s);
-        if (dist < 0.42 && (!best || s < best.s)) best = { q, s };
+        if (Math.hypot(cx - v[0] * s, cy - v[1] * s) < 0.42) found.push({ q, s });
       }
-      if (best) {
-        pts.push([pos[0] + v[0] * best.s, pos[1] + v[1] * best.s]);
-        return { pts, hit: best.q, bounces: seg };
+      found.sort((a, b) => a.s - b.s);
+      for (const f of found) {
+        hits.push({ q: f.q, d: travelled + f.s, bounces: seg, at: [pos[0] + v[0] * f.s, pos[1] + v[1] * f.s] });
       }
       pos = [pos[0] + v[0] * t, pos[1] + v[1] * t];
       pts.push(pos);
+      travelled += t;
       if (seg === 3) break;
       if (tX <= tY + 1e-7) v = [-v[0], v[1]];
       if (tY <= tX + 1e-7) v = [v[0], -v[1]];
     }
-    return { pts, hit: null, bounces: 3 };
+    return { pts, hits };
   }
 
   async function doScatter(p, level) {
@@ -727,13 +731,21 @@
     svg('line', { class: 'crosshair', x1: tx + 0.5, y1: ty + 0.1, x2: tx + 0.5, y2: ty + 0.9 }, cross);
     toast(`🎲 무작위 좌표 ${coord(tx, ty)} 로 발사!`);
     await sleep(900);
-    const { pts, hit, bounces } = traceScatter(p, tx, ty);
-    await animatePath(pts, p.color, 12);
+    const { pts, hits } = traceScatter(p, tx, ty);
+    // 탄환이 지나가는 순간 피해 적용 (관통)
+    const events = hits.map(h => ({
+      d: h.d,
+      fn: () => {
+        burst(h.at[0], h.at[1], '#ff5d6c');
+        damage(h.q, dmg, p, `난사(반사 ${h.bounces}회)`);
+      },
+    }));
+    await animatePath(pts, p.color, 12, events);
     cross.remove();
     const end = pts[pts.length - 1];
-    burst(end[0], end[1], hit ? '#ff5d6c' : '#fff');
-    if (hit) damage(hit, dmg, p, `난사(반사 ${bounces}회)`);
-    else log(`${tag(p)} 🎲 ${coord(tx, ty)} 방향 난사… 3번 튕기고 소멸`);
+    burst(end[0], end[1], '#fff');
+    if (!hits.length) log(`${tag(p)} 🎲 ${coord(tx, ty)} 방향 난사… 3번 튕기고 소멸`);
+    else if (hits.length > 1) log(`${tag(p)} 🎲 관통! ${hits.length}명 적중`);
   }
 
   // ------------------------------------------------------------------
@@ -941,7 +953,7 @@
         <h3>행동</h3>
         <table>
           <tr><th>행동</th><th>기본</th><th>심화</th></tr>
-          <tr><td>🎲 난사 — 무작위 좌표로 발사, 벽에 최대 3번 반사. 튕긴 탄에 <b>자신도</b> 맞을 수 있음</td><td>25</td><td>35</td></tr>
+          <tr><td>🎲 난사 — 무작위 좌표로 발사, 벽에 3번 반사. <b>관통탄</b>이라 맞혀도 사라지지 않고 경로상의 모두에게 피해 (한 발당 1인 1회). 튕긴 탄에 <b>자신도</b> 맞을 수 있음</td><td>25</td><td>35</td></tr>
           <tr><td>🎯 조준 사격 — 바라보는 방향으로 직선, 처음 맞는 플레이어에게 피해</td><td>20</td><td>30</td></tr>
           <tr><td>👣 이동 — 바라보는 방향으로 이동, 벽에서 반사. 부딪히면 멈추고 상대에게 ${BUMP_DMG} 피해</td><td>1~3칸</td><td>1~5칸</td></tr>
           <tr><td>🎁 랜덤박스 — 회복·방패·강화탄·번개·유성우·순간이동·위치교환·추가행동·폭탄</td><td>전체</td><td>꽝 없음</td></tr>
