@@ -213,7 +213,7 @@
       return build('역함수의 미분',
         `$f(x) = x^3${tail([[a, 'x'], [b, '']])}$ 의 역함수를 $g(x)$ 라 할 때, $g'(${v})$ 의 값은?`,
         T(frac(1, fp)),
-        [String(fp), frac(1, 3 * v * v + a), frac(1, 3 * t + a), frac(1, a), frac(-1, fp), frac(2, fp)].map(T),
+        [String(fp), frac(1, 3 * v * v + a), frac(1, (3 * t + a) || fp + 1), frac(1, a), frac(-1, fp), frac(2, fp)].map(T),
         `$f(${t}) = ${v}$ 이므로 $g(${v}) = ${t}$. $g'(${v}) = \\dfrac{1}{f'(${t})} = \\dfrac{1}{3\\cdot ${t * t} + ${a}} = ${frac(1, fp)}$`);
     },
 
@@ -1332,7 +1332,7 @@
     if (!f) throw new Error('없는 문제 유형: ' + n);
     return f;
   });
-  // 심화 = 2~3단계를 엮어야 풀리는 문제만. 공식 한 번이면 끝나는 문제는 기본으로 내렸다.
+  // 기본 = 교과서 기본 / 심화 = 공식 한두 번 (모의고사 수준) / 킬러 = 2~3단계를 엮는 수능 상위권
   const ALL = [...EASY, ...HARD, ...COMMON_EXTRA_EASY, ...COMMON_EXTRA_HARD, ...COMMON_MORE_EASY, ...COMMON_MORE_HARD,
     ...CALC_EXTRA_EASY, ...CALC_MORE_EASY, ...CALC_MORE_HARD, ...PROB_EASY, ...PROB_HARD, ...PROB_MORE_EASY, ...PROB_MORE_HARD,
     ...GEO_EASY, ...GEO_HARD, ...GEO_MORE_EASY, ...GEO_MORE_HARD];
@@ -1340,23 +1340,27 @@
   const CATS = {
     common: {
       name: '공통', sub: '수학Ⅰ · 수학Ⅱ',
-      easy: [...pickN(['polyDeriv', 'integral', 'extreme', 'tangent', 'areaBetween', 'recurrence', 'telescoping']), ...COMMON_EXTRA_EASY, ...COMMON_MORE_EASY],
-      hard: [...pickN(['undeterminedLimit', 'integralDefined', 'differentiable', 'logEquation', 'trigQuadMax', 'trigEqCount', 'logIneq', 'absIntegral', 'velocityDist']), ...COMMON_MULTI],
+      easy: [...pickN(['polyDeriv', 'integral', 'extreme', 'tangent']), ...COMMON_EXTRA_EASY, ...COMMON_MORE_EASY],
+      hard: [...pickN(['areaBetween', 'recurrence', 'telescoping', 'logEquation', 'trigEqCount', 'logIneq', 'absIntegral', 'velocityDist'])],
+      killer: [...pickN(['undeterminedLimit', 'integralDefined', 'differentiable', 'trigQuadMax']), ...COMMON_MULTI],
     },
     calc: {
       name: '미적분', sub: '미적분',
-      easy: [...pickN(['limit', 'chain', 'product', 'logDeriv', 'second', 'trigMax', 'inverseDeriv', 'implicitDeriv', 'parametricDeriv', 'eLimit', 'sqrtSeqLimit', 'trigLimit', 'substitution', 'lnAreaParts', 'volumeSection']), ...CALC_EXTRA_EASY, ...CALC_MORE_EASY],
-      hard: [...pickN(['geometricSeries', 'byParts', 'inflection', 'arcLength']), ...CALC_MULTI],
+      easy: [...pickN(['limit', 'chain', 'product', 'logDeriv', 'second', 'trigMax']), ...CALC_EXTRA_EASY, ...CALC_MORE_EASY],
+      hard: [...pickN(['inverseDeriv', 'implicitDeriv', 'parametricDeriv', 'eLimit', 'sqrtSeqLimit', 'trigLimit', 'substitution', 'byParts', 'lnAreaParts', 'volumeSection'])],
+      killer: [...pickN(['geometricSeries', 'inflection', 'arcLength']), ...CALC_MULTI],
     },
     prob: {
       name: '확률과 통계', sub: '확률과 통계',
-      easy: [...PROB_EASY, ...PROB_MORE_EASY, ...pickN(['sampleSd', 'normalSym', 'circularAdj', 'repPermCond', 'intSolutions'])],
-      hard: [...pickN(['condProb', 'bernoulli', 'binomVar', 'normalStd', 'sameThingPerm', 'increasingFunc']), ...PROB_MULTI],
+      easy: [...PROB_EASY, ...PROB_MORE_EASY],
+      hard: [...PROB_HARD, ...PROB_MORE_HARD],
+      killer: [...PROB_MULTI, ...pickN(['condProb', 'increasingFunc'])],
     },
     geo: {
       name: '기하', sub: '기하',
-      easy: [...GEO_EASY, ...GEO_MORE_EASY, ...pickN(['sphereCircle', 'hyperbolaVertex', 'ellipseTangentY', 'ellipseTangent', 'projection', 'sphereRadius', 'ellipseFocalSum', 'hyperbolaFocalDiff'])],
-      hard: [...pickN(['parabolaFocalDist', 'vecAngle']), ...GEO_MULTI],
+      easy: [...GEO_EASY, ...GEO_MORE_EASY],
+      hard: [...GEO_HARD, ...GEO_MORE_HARD],
+      killer: [...GEO_MULTI, ...pickN(['parabolaFocalDist', 'vecAngle'])],
     },
   };
   let lastName = '';

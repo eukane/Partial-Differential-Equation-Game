@@ -50,9 +50,14 @@
 
   // 정답 점수 = 난이도 점수 + 속도 점수(남은 시간 비율 × 100)
   const LEVELS = {
-    easy: { label: '기본', desc: '교과서 · 모의고사 기본', time: 45, pts: 100 },
-    hard: { label: '심화', desc: '수능 상위권 유형', time: 90, pts: 200 },
+    easy:   { label: '기본', desc: '교과서 기본', time: 45, pts: 100 },
+    hard:   { label: '심화', desc: '모의고사 수준', time: 75, pts: 200 },
+    killer: { label: '킬러', desc: '수능 상위권 · 2~3단계', time: 120, pts: 300 },
   };
+  const LEVEL_KEYS = ['easy', 'hard', 'killer'];
+  const KILLER_BONUS = 12;  // 킬러 문제를 맞히면 심화보다 공격 피해 +12
+  /** 공격 피해: 킬러는 심화 피해 + 보너스 */
+  const styleDmg = (s, level) => (level === 'killer' ? s.dmg.hard + KILLER_BONUS : s.dmg[level] || s.dmg.easy);
   const FAST_RATIO = 1 / 3;   // 제한 시간의 1/3 안에 맞히면 ⚡ 빠른 정답 (행동 강화)
   const FAST_DMG = 10;
   const CAT_KEYS = ['common', 'calc', 'prob', 'geo'];
@@ -757,7 +762,7 @@
   };
   const STYLE_KEYS = Object.keys(STYLES);
   const OFFER_N = 3;
-  const MOVE_RANGE = { easy: 2, hard: 3 };
+  const MOVE_RANGE = { easy: 2, hard: 3, killer: 4 };
   const MORTAR_RANGE = 5;
 
   /** 증강 후보: 게임 seed + 플레이어 번호로 정해져 새로고침해도 바뀌지 않는다 */
@@ -774,12 +779,12 @@
   function actionInfo(key, p) {
     if (key === 'attack') {
       const s = STYLES[p && p.style] || STYLES.sniper;
-      return { icon: s.icon, name: `공격 · ${s.name}`, sub: s.desc, easy: `피해 ${s.dmg.easy}`, hard: `피해 ${s.dmg.hard}`, fast: '피해 +10' };
+      return { icon: s.icon, name: `공격 · ${s.name}`, sub: s.desc, easy: `피해 ${s.dmg.easy}`, hard: `피해 ${s.dmg.hard}`, killer: `피해 ${styleDmg(s, 'killer')}`, fast: '피해 +10' };
     }
     if (key === 'move') {
-      return { icon: '👣', name: '이동', sub: '원하는 칸으로 (킹처럼 가로·세로·대각선)', easy: `${MOVE_RANGE.easy}칸 이내`, hard: `${MOVE_RANGE.hard}칸 이내`, fast: '이동 범위 +1칸' };
+      return { icon: '👣', name: '이동', sub: '원하는 칸으로 (킹처럼 가로·세로·대각선)', easy: `${MOVE_RANGE.easy}칸 이내`, hard: `${MOVE_RANGE.hard}칸 이내`, killer: `${MOVE_RANGE.killer}칸 이내`, fast: '이동 범위 +1칸' };
     }
-    return { icon: '🎁', name: '랜덤박스', sub: '무작위 효과 획득', easy: '모든 효과 (꽝 포함)', hard: '꽝 없음', fast: '꽝 없음' };
+    return { icon: '🎁', name: '랜덤박스', sub: '무작위 효과 획득', easy: '모든 효과 (꽝 포함)', hard: '꽝 없음', killer: '꽝 없음 + 효과 2개', fast: '꽝 없음' };
   }
 
   function maybeAugment() {
@@ -799,7 +804,7 @@
             <span class="aug-icon">${s.icon}</span>
             <b>${s.name}</b>
             <span class="aug-desc">${s.desc}</span>
-            <em>피해 ${s.dmg.easy} · 심화 ${s.dmg.hard}</em>
+            <em>피해 ${s.dmg.easy} · 심화 ${s.dmg.hard} · 킬러 ${styleDmg(s, 'killer')}</em>
           </button>`;
         }).join('')}
       </div>`, 'augment-card');
@@ -1019,9 +1024,9 @@
         <div class="cats">
           ${CAT_KEYS.map(k => `<button class="cat" data-c="${k}"><span class="cat-icon">${CAT_ICONS[k]}</span><b>${catInfo(k).name}</b><small>${catInfo(k).sub}</small></button>`).join('')}
         </div>
-        <p class="step-label">② 난이도 <span class="muted">(1 2)</span></p>
+        <p class="step-label">② 난이도 <span class="muted">(1 2 3)</span></p>
         <div class="levels">
-          ${['easy', 'hard'].map(l => `
+          ${LEVEL_KEYS.map(l => `
             <button class="level ${l}" data-l="${l}">
               <b>${LEVELS[l].label}</b><span>${LEVELS[l].desc}</span><em>${a[l]}</em>
               <small>정답 ${LEVELS[l].pts}점 + 속도 보너스 최대 100점</small>
@@ -1046,6 +1051,7 @@
         if (ci >= 0) { cat = CAT_KEYS[ci]; mark(); }
         if (e.key === '1') c.querySelector('[data-l="easy"]').click();
         if (e.key === '2') c.querySelector('[data-l="hard"]').click();
+        if (e.key === '3') c.querySelector('[data-l="killer"]').click();
         if (e.key === 'Escape') c.querySelector('[data-l=""]').click();
       };
     });
@@ -1323,7 +1329,7 @@
 
   async function doAttack(p, level, fast, target) {
     const s = STYLES[p.style] || STYLES.sniper;
-    let dmg = s.dmg[level] + (fast ? FAST_DMG : 0);
+    let dmg = styleDmg(s, level) + (fast ? FAST_DMG : 0);
     if (p.power) {
       dmg = Math.round(dmg * POWER_MULT);
       p.power = false;
@@ -1448,12 +1454,13 @@
   }
 
   async function doBox(p, level, fast) {
-    const pool = BOX.filter(b => !((level === 'hard' || fast) && b.bad) && !(prepRound() && ['bolt', 'meteor'].includes(b.id)));
+    const pool = BOX.filter(b => !((level !== 'easy' || fast) && b.bad) && !(prepRound() && ['bolt', 'meteor'].includes(b.id)));
     const res = weighted(pool);
     if (brawl()) {
       toast(`${p.emoji} 🎁 ${res.icon} ${res.name}`, 2000);
       log(`${tag(p)} 🎁 랜덤박스: ${res.icon} ${res.name}`);
       await applyBox(p, res);
+      await killerBonusBox(p, level, pool, res);
       return;
     }
     const c = openModal(`
@@ -1483,6 +1490,17 @@
     closeModal();
     log(`${tag(p)} 🎁 랜덤박스: ${res.icon} ${res.name}`);
     await applyBox(p, res);
+    await killerBonusBox(p, level, pool, res);
+  }
+
+  /** 킬러로 연 랜덤박스는 효과를 하나 더 (추가 행동 제외) */
+  async function killerBonusBox(p, level, pool, first) {
+    if (level !== 'killer' || !p.alive) return;
+    const extra = weighted(pool.filter(b => b.id !== 'again' && b.id !== first.id));
+    toast(`🔥 킬러 보너스: ${extra.icon} ${extra.name}`, 1800);
+    log(`${tag(p)} 🔥 킬러 보너스: ${extra.icon} ${extra.name}`);
+    await sleep(300);
+    await applyBox(p, extra);
   }
 
   async function applyBox(p, b) {
@@ -1607,7 +1625,7 @@
     const cell = c => (Array.isArray(c) ? [int(c[0], 0, N - 1), int(c[1], 0, N - 1)] : null);
     if (a.key === 'pick') act.style = STYLE_KEYS.includes(a.style) ? a.style : null;
     if (['attack', 'move', 'box'].includes(a.key)) {
-      act.level = a.level === 'hard' ? 'hard' : 'easy';
+      act.level = LEVEL_KEYS.includes(a.level) ? a.level : 'easy';
       act.cat = CAT_KEYS.includes(a.cat) ? a.cat : 'calc';
       act.ok = !!a.ok;
       act.to = a.to ? 1 : 0;
@@ -2227,24 +2245,24 @@
         <ul>
           <li>첫 차례에 <b>증강</b>을 고릅니다. 무작위 공격 스타일 ${OFFER_N}개 중 하나를 골라 게임 끝까지 씁니다.</li>
           <li><b>조준은 무료</b>입니다. 판 위의 칸을 누르면 그 칸을 조준하고, 버튼으로 5°·15°씩 미세 조정할 수 있어요.</li>
-          <li>공격·이동·랜덤박스 중 하나를 고르고, <b>과목</b>(공통·미적분·확률과 통계·기하)과 <b>난이도</b>(기본·심화)를 골라 문제를 풉니다. 맞히면 실행, 틀리면 턴 종료.</li>
+          <li>공격·이동·랜덤박스 중 하나를 고르고, <b>과목</b>(공통·미적분·확률과 통계·기하)과 <b>난이도</b>(기본·심화·🔥킬러)를 골라 문제를 풉니다. 맞히면 실행, 틀리면 턴 종료.</li>
           <li><b>턴제</b>: 항상 1번 → 2번 → … 순서대로 돌아가요. 1라운드는 <b>준비 라운드</b>라 공격할 수 없고(이동·랜덤박스·증강만), 추가 행동으로는 공격할 수 없어요.</li>
           <li><b>🔥 난전</b> (온라인): 턴 없이 모두 동시에 문제를 풀고, 맞히는 대로 바로 행동해요. 오답이면 ${BRAWL_LOCK_MS / 1000}초 동안 쉬어요. 방장이 대기실에서 모드를 골라요.</li>
           <li><b>🪙 동전 칸</b>: 판에 동전 칸이 ${COIN_COUNT}개 있어요. 문제를 맞히고 그 칸으로 이동하면 동전을 던져, 앞면이면 살아 있는 모두의 위치가 무작위로 섞여요. 쓴 동전 칸은 다른 곳으로 옮겨 가요.</li>
           <li><b>온라인 관전</b>: 다른 사람 차례에는 그 사람이 고르는 과목·문제·답이 내 화면에도 실시간으로 보여요.</li>
-          <li><b>점수</b>: 정답마다 기본 100점 / 심화 200점 + 속도 보너스(최대 100점). <b>⚡ 빠른 정답</b>(제한 시간 1/3 안)이면 공격 피해 +10, 이동 범위 +1칸, 랜덤박스 꽝 없음.</li>
+          <li><b>점수</b>: 정답마다 기본 100점 / 심화 200점 / 킬러 300점 + 속도 보너스(최대 100점). <b>⚡ 빠른 정답</b>(제한 시간 1/3 안)이면 공격 피해 +10, 이동 범위 +1칸, 랜덤박스 꽝 없음.</li>
         </ul>
         <h3>행동</h3>
         <table>
-          <tr><th>행동</th><th>기본</th><th>심화</th></tr>
-          <tr><td>⚔️ 공격 — 고른 증강 스타일로 공격</td><td colspan="2">스타일별 (아래 표)</td></tr>
-          <tr><td>👣 이동 — 킹처럼 가로·세로·대각선 어느 방향이든, 표시된 빈 칸을 눌러 이동</td><td>${MOVE_RANGE.easy}칸 이내</td><td>${MOVE_RANGE.hard}칸 이내</td></tr>
-          <tr><td>🎁 랜덤박스 — ${BOX.map(b => `${b.icon} ${b.name}(${b.desc})`).join(' · ')}</td><td>전체</td><td>꽝 없음</td></tr>
+          <tr><th>행동</th><th>기본</th><th>심화</th><th>킬러</th></tr>
+          <tr><td>⚔️ 공격 — 고른 증강 스타일로 공격</td><td colspan="3">스타일별 (아래 표)</td></tr>
+          <tr><td>👣 이동 — 킹처럼 가로·세로·대각선 어느 방향이든, 표시된 빈 칸을 눌러 이동</td><td>${MOVE_RANGE.easy}칸</td><td>${MOVE_RANGE.hard}칸</td><td>${MOVE_RANGE.killer}칸</td></tr>
+          <tr><td>🎁 랜덤박스 — ${BOX.map(b => `${b.icon} ${b.name}(${b.desc})`).join(' · ')}</td><td>전체</td><td>꽝 없음</td><td>꽝 없음 + 효과 2개</td></tr>
         </table>
         <h3>증강 (공격 스타일)</h3>
         <table>
-          <tr><th>스타일</th><th>기본</th><th>심화</th></tr>
-          ${STYLE_KEYS.map(k => `<tr><td>${STYLES[k].icon} <b>${STYLES[k].name}</b> — ${STYLES[k].desc}</td><td>${STYLES[k].dmg.easy}</td><td>${STYLES[k].dmg.hard}</td></tr>`).join('')}
+          <tr><th>스타일</th><th>기본</th><th>심화</th><th>킬러</th></tr>
+          ${STYLE_KEYS.map(k => `<tr><td>${STYLES[k].icon} <b>${STYLES[k].name}</b> — ${STYLES[k].desc}</td><td>${STYLES[k].dmg.easy}</td><td>${STYLES[k].dmg.hard}</td><td>${styleDmg(STYLES[k], 'killer')}</td></tr>`).join('')}
         </table>
         <h3>온라인 사설방</h3>
         <ul>

@@ -288,6 +288,9 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .level small { color: var(--muted); }
 .level.easy { border-color: #2f7a52; }
 .level.hard { border-color: #8c2c52; }
+.level.killer { border-color: #d9480f; background: linear-gradient(180deg, #3a1c10 0%, var(--card) 100%); }
+.level-card .levels { grid-template-columns: repeat(3, 1fr); }
+.chip.killer { background: #7a2e0e; color: #ffd0b0; }
 .card .ghost.wide { width: 100%; }
 
 .quiz-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -538,7 +541,7 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
   .card { padding: 16px; }
 }
 @media (max-width: 480px) {
-  .choices, .levels, .online-actions { grid-template-columns: 1fr; }
+  .choices, .levels, .online-actions, .level-card .levels { grid-template-columns: 1fr; }
   .cats { grid-template-columns: repeat(2, 1fr); }
   .card { padding: 16px; }
   .question { font-size: 1rem; }
