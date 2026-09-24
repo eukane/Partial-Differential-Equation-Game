@@ -17,7 +17,9 @@
   // ------------------------------------------------------------------
   //  상수
   // ------------------------------------------------------------------
-  const N = 8;
+  // 판 크기. 2~4인은 8×8 체스판, 5인은 11×11 격자 안의 정오각형 판 (setBoard 가 바꾼다)
+  let N = 8;
+  const BOARD = { kind: '', poly: [], valid: null };
   // 0=북(화면 위) 부터 시계 방향 45° 간격
   const DIRS = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
   const DIR_NAMES = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
@@ -28,18 +30,20 @@
   const POWER_MULT = 1.5;   // 강화탄 배율 (한 방에 끝나지 않도록 2배 → 1.5배)
   const BUMP_DMG = 10;
 
-  const MAX_PLAYERS = 4;
+  const MAX_PLAYERS = 5;
   const PRESETS = [
     { name: '레드', color: '#ff5a5f', emoji: '🦊' },
     { name: '블루', color: '#4d8dff', emoji: '🐧' },
     { name: '그린', color: '#35d07f', emoji: '🐸' },
     { name: '퍼플', color: '#b57bff', emoji: '🐙' },
+    { name: '옐로', color: '#ffc53d', emoji: '🐤' },
   ];
   // 인원수별 시작 칸: 서로 같은 줄·대각선·나이트 칸에 겹치지 않는 바람개비 배치
   const LAYOUTS = {
     2: [[1, 7], [6, 0]],
     3: [[1, 7], [7, 5], [3, 0]],
     4: [[1, 7], [7, 6], [6, 0], [0, 1]],
+    5: [[5, 2], [9, 4], [7, 9], [3, 8], [1, 5]],   // 오각형 판의 다섯 꼭짓점 근처
   };
 
 
@@ -116,8 +120,8 @@
     };
   }
   const newSeed = () => Math.floor(Math.random() * 2 ** 31);
-  const inB = (x, y) => x >= 0 && x < N && y >= 0 && y < N;
-  const coord = (x, y) => 'ABCDEFGH'[x] + (N - y);
+  const inB = (x, y) => x >= 0 && x < N && y >= 0 && y < N && (!BOARD.valid || BOARD.valid.has(x + ',' + y));
+  const coord = (x, y) => 'ABCDEFGHIJK'[x] + (N - y);
   const cur = () => S.players[S.turn];
   const alive = () => S.players.filter(p => p.alive);
   const enemies = p => S.players.filter(q => q.alive && q !== p);
@@ -150,22 +154,10 @@
       setup: $('#setup'), handover: $('#handover'), lobby: $('#lobby'), modal: $('#modal'), modalCard: $('#modalCard'),
     });
 
-    // 체스판 칸
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        const c = document.createElement('div');
-        c.className = 'cell' + ((x + y) % 2 ? ' dark' : '');
-        c.dataset.x = x; c.dataset.y = y;
-        if (y === N - 1) c.insertAdjacentHTML('beforeend', `<span class="coord file">${'ABCDEFGH'[x]}</span>`);
-        if (x === 0) c.insertAdjacentHTML('beforeend', `<span class="coord rank">${N - y}</span>`);
-        el.cells.appendChild(c);
-      }
-    }
-
     // 시작 화면
     $('#setupPlayers').innerHTML = `
       <div class="count-row" role="group" aria-label="인원">
-        <span>인원</span>${[2, 3, 4].map(n => `<button class="count-btn" data-n="${n}">${n}명</button>`).join('')}
+        <span>인원</span>${[2, 3, 4, 5].map(n => `<button class="count-btn" data-n="${n}">${n}명</button>`).join('')}
       </div>` + PRESETS.map((p, i) => `
       <div class="setup-row" style="--pc:${p.color}" data-row="${i}">
         <span>${p.emoji}</span>
@@ -208,10 +200,70 @@
     updateCamera();
   }
 
+  // ------------------------------------------------------------------
+  //  판: 네모 또는 오각형
+  // ------------------------------------------------------------------
+  function pentagonPoly(W) {
+    const R = W * 5.75 / 11, cx = W / 2, cy = W / 2 + W * 0.5 / 11;
+    return [...Array(5).keys()].map(k => {
+      const a = (-90 + 72 * k) * Math.PI / 180;
+      return [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+    });
+  }
+  function inPoly(x, y, poly) {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [x1, y1] = poly[i], [x2, y2] = poly[j];
+      if ((y1 > y) !== (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1) c = !c;
+    }
+    return c;
+  }
+  /** 인원수에 맞는 판을 만든다 (5인 이상이면 오각형) */
+  function setBoard(count) {
+    const kind = count >= 5 ? 'pentagon' : 'square';
+    if (BOARD.kind === kind) return;
+    BOARD.kind = kind;
+    N = kind === 'pentagon' ? 11 : 8;
+    BOARD.poly = kind === 'pentagon' ? pentagonPoly(N) : [[0, 0], [N, 0], [N, N], [0, N]];
+    BOARD.valid = null;
+    if (kind === 'pentagon') {
+      BOARD.valid = new Set();
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inPoly(x + 0.5, y + 0.5, BOARD.poly)) BOARD.valid.add(x + ',' + y);
+    }
+    el.cells.innerHTML = '';
+    el.cells.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+    el.cells.style.gridTemplateRows = `repeat(${N}, 1fr)`;
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const c = document.createElement('div');
+        c.className = 'cell' + ((x + y) % 2 ? ' dark' : '') + (inB(x, y) ? '' : ' void');
+        c.dataset.x = x; c.dataset.y = y;
+        if (kind === 'square') {
+          if (y === N - 1) c.insertAdjacentHTML('beforeend', `<span class="coord file">${'ABCDEFGHIJK'[x]}</span>`);
+          if (x === 0) c.insertAdjacentHTML('beforeend', `<span class="coord rank">${N - y}</span>`);
+        }
+        el.cells.appendChild(c);
+      }
+    }
+    el.board.classList.toggle('pentagon', kind === 'pentagon');
+    el.board.style.setProperty('--n', N);
+    el.fx.setAttribute('viewBox', `0 0 ${N} ${N}`);
+    el.fx.innerHTML = '';
+    if (kind === 'pentagon') {
+      el.cells.style.clipPath = `polygon(${BOARD.poly.map(([x, y]) => `${(x / N * 100).toFixed(3)}% ${(y / N * 100).toFixed(3)}%`).join(', ')})`;
+      svg('polygon', { class: 'board-frame', points: BOARD.poly.map(q => q.join(',')).join(' ') });
+    } else {
+      el.cells.style.clipPath = '';
+    }
+    el.pieces.innerHTML = '';
+    layout();
+  }
+
   /** i 번째 플레이어 (전체 n명). 처음에는 판 가운데를 바라본다 */
   function makePlayer(i, name, n) {
     const p = PRESETS[i];
     const [x, y] = (LAYOUTS[n] || LAYOUTS[3])[i];
+    setBoard(n);
     const ang = Math.round(normAng(Math.atan2(3.5 - x, -(3.5 - y)) * 180 / Math.PI) / 5) * 5;
     return { id: i, name, color: p.color, emoji: p.emoji, x, y, ang, style: null,
       hp: MAX_HP, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0 };
@@ -234,7 +286,9 @@
 
   function layout() {
     const r = el.stage.getBoundingClientRect();
-    S.cell = Math.max(30, Math.min(88, Math.floor(Math.min(r.width / 11.3, r.height / 7.4))));
+    // 판이 어느 방향으로 돌아도 화면 안에 들어오게: 네모는 대각선(√2배), 오각형은 외접원 지름(약 1.05배)
+    const spread = BOARD.kind === 'pentagon' ? 1.22 : 1.41;
+    S.cell = Math.max(22, Math.min(88, Math.floor(Math.min(r.width / (N * spread), r.height / (N * 0.925)))));
     el.board.style.setProperty('--cell', S.cell + 'px');
     updateCamera();
   }
@@ -282,8 +336,8 @@
     renderTurn();
     renderGuide();
     updateCamera();
-    el.roundInfo.textContent = S.phase === 'setup' ? ''
-      : `라운드 ${S.round}${prepRound() ? ' (준비 · 공격 불가)' : ''} · 순서 ${orderFor(S.round).filter(i => S.players[i] && S.players[i].alive).map(i => S.players[i].emoji).join('→')}`;
+    el.roundInfo.innerHTML = S.phase === 'setup' ? ''
+      : `라운드 ${S.round}${prepRound() ? ' (준비 · 공격 불가)' : ''}<span class="order"> · 순서 ${orderFor(S.round).filter(i => S.players[i] && S.players[i].alive).map(i => S.players[i].emoji).join('→')}</span>`;
     renderSpectate();
   }
 
@@ -751,7 +805,7 @@
     const out = [];
     for (let y = 0; y < N; y++) {
       for (let x = 0; x < N; x++) {
-        if (Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) <= MORTAR_RANGE) out.push([x, y]);
+        if (inB(x, y) && Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) <= MORTAR_RANGE) out.push([x, y]);
       }
     }
     return out;
@@ -1018,9 +1072,20 @@
     const hits = [];
     let travelled = 0, left = maxLen;
     for (let seg = 0; seg <= bounces; seg++) {
-      const tX = v[0] > EPS ? (N - pos[0]) / v[0] : v[0] < -EPS ? -pos[0] / v[0] : Infinity;
-      const tY = v[1] > EPS ? (N - pos[1]) / v[1] : v[1] < -EPS ? -pos[1] / v[1] : Infinity;
-      const t = Math.min(tX, tY, left);
+      // 가장 가까운 벽 (판의 다각형 변)
+      let t = left, walls = [];
+      const poly = BOARD.poly;
+      for (let w = 0; w < poly.length; w++) {
+        const e0 = poly[w], e1 = poly[(w + 1) % poly.length];
+        const ex = e1[0] - e0[0], ey = e1[1] - e0[1];
+        const den = v[0] * ey - v[1] * ex;
+        if (Math.abs(den) < EPS) continue;
+        const wx = e0[0] - pos[0], wy = e0[1] - pos[1];
+        const tt = (wx * ey - wy * ex) / den;      // 탄이 가는 거리
+        const u = (wx * v[1] - wy * v[0]) / den;   // 변 위의 위치 (0~1)
+        if (tt <= 1e-7 || u < -1e-9 || u > 1 + 1e-9) continue;
+        if (tt < t - 1e-7) { t = tt; walls = [w]; } else if (Math.abs(tt - t) <= 1e-7) walls.push(w);
+      }
       const found = [];
       for (const q of S.players) {
         if (!q.alive || (seg === 0 && q === p) || hits.some(h => h.q === q)) continue;
@@ -1040,8 +1105,14 @@
       travelled += t;
       left -= t;
       if (left <= 1e-9 || seg === bounces) break;
-      if (tX <= tY + 1e-7) v = [-v[0], v[1]];
-      if (tY <= tX + 1e-7) v = [v[0], -v[1]];
+      // 벽의 법선에 대해 반사 (모서리면 두 벽 모두)
+      for (const w of walls) {
+        const e0 = poly[w], e1 = poly[(w + 1) % poly.length];
+        const len = Math.hypot(e1[0] - e0[0], e1[1] - e0[1]);
+        const nx = -(e1[1] - e0[1]) / len, ny = (e1[0] - e0[0]) / len;
+        const d = v[0] * nx + v[1] * ny;
+        v = [v[0] - 2 * d * nx, v[1] - 2 * d * ny];
+      }
     }
     return { pts, hits };
   }
@@ -1115,7 +1186,7 @@
     }
     let tgt = target;
     if (p.style === 'scatter') {
-      do { tgt = [rand(N), rand(N)]; } while (tgt[0] === p.x && tgt[1] === p.y);
+      do { tgt = [rand(N), rand(N)]; } while (!inB(tgt[0], tgt[1]) || (tgt[0] === p.x && tgt[1] === p.y));
     }
     let cross = null;
     if (tgt) {
@@ -1247,7 +1318,7 @@
         break;
       case 'tele': {
         const empty = [];
-        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!at(x, y)) empty.push([x, y]);
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inB(x, y) && !at(x, y)) empty.push([x, y]);
         const [x, y] = empty[rand(empty.length)];
         burst(p.x + 0.5, p.y + 0.5, '#b18cff');
         p.x = x; p.y = y;
@@ -1824,7 +1895,7 @@
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
           : full ? '자리가 다 찼어요. 게임이 시작되면 관전할 수 있어요.'
-          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… (2~4명)' : `${o.seats.length}명 모였어요. 시작할 수 있어요.`)
+          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… (2~5명, 5명이면 오각형 판)' : `${o.seats.length}명 모였어요. 시작할 수 있어요.`)
           : '방장이 시작하길 기다리는 중…'}</p>
         ${o.host ? `<button class="primary big" id="btnBegin" ${o.seats.length < 2 ? 'disabled' : ''}>게임 시작 ▶</button>` : ''}
         <button class="ghost wide" id="btnLobbyLeave">나가기</button>
@@ -1852,7 +1923,7 @@
     const c = openModal(`
       <div class="rules">
         <h2>📖 게임 규칙</h2>
-        <p class="muted">8×8 체스판 위에서 2~4명이 싸우는 턴제 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
+        <p class="muted">8×8 체스판(5명이면 오각형 판) 위에서 2~5명이 싸우는 턴제 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
         <h3>턴 진행</h3>
         <ul>
           <li>첫 차례에 <b>증강</b>을 고릅니다. 무작위 공격 스타일 ${OFFER_N}개 중 하나를 골라 게임 끝까지 씁니다.</li>
@@ -1877,7 +1948,7 @@
         <h3>온라인 사설방</h3>
         <ul>
           <li>방장이 <b>방 만들기</b>를 누르면 4자리 방 코드와 초대 링크가 나옵니다. 친구는 로그인 없이 링크만 열면 되고, 코드가 자동으로 채워져요.</li>
-          <li>2~4명이 모이면 방장이 시작합니다. 자리가 찬 뒤 들어온 사람은 관전합니다.</li>
+          <li>2~5명이 모이면 방장이 시작합니다 (5명이면 오각형 판). 자리가 찬 뒤 들어온 사람은 관전합니다.</li>
           <li>각자 자기 기기에서 자기 차례에만 문제를 풉니다. 방장이 페이지를 닫으면 게임이 멈추고, 방장이 같은 기기에서 다시 열어 <b>진행 중이던 방 다시 열기</b>를 누르면 이어집니다.</li>
         </ul>
         <h3>문제 범위</h3>
