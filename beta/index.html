@@ -3,92 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>미분 배틀 β</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%88%82%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="../vendor/katex/katex.min.css">
-  <script src="../vendor/katex/katex.min.js"></script>
-  <link rel="stylesheet" href="css/style.css">
+  <title>미분 배틀 ∂</title>
+  <script>location.replace('../' + location.hash);</script>
+  <meta http-equiv="refresh" content="0; url=../">
 </head>
 <body>
-  <div id="app">
-    <header class="topbar">
-      <div class="brand">∂ 미분 배틀 <small>β 베타</small></div>
-      <div class="round" id="roundInfo"></div>
-      <div class="top-actions">
-        <button id="btnView" class="ghost" title="플레이어 시점 / 전체 보기 전환 (V)">🧭 전체 보기</button>
-        <button id="btnRules" class="ghost">📖 규칙</button>
-        <button id="btnLeave" class="ghost" hidden>🚪 방 나가기</button>
-      </div>
-    </header>
-
-    <main class="layout">
-      <section class="stage" id="stage">
-        <div class="board" id="board">
-          <div class="cells" id="cells"></div>
-          <svg class="fx" id="fx" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
-          <div id="pieces"></div>
-        </div>
-        <div class="compass" id="compass" title="북쪽 방향"><div class="needle">N</div></div>
-        <div class="toast" id="toast"></div>
-      </section>
-
-      <aside class="panel">
-        <div class="players" id="playerList"></div>
-        <div class="turn" id="turnPanel"></div>
-        <div class="log">
-          <h3>기록</h3>
-          <ol id="log"></ol>
-        </div>
-      </aside>
-    </main>
-  </div>
-
-  <!-- 시작 화면 -->
-  <div class="overlay" id="setup">
-    <div class="card setup-card">
-      <h1>∂ 미분 배틀 <span class="beta-tag">β</span></h1>
-      <p class="muted">베타: 자유 조준 · 칸 골라 이동 · 증강(공격 스타일) 선택</p>
-      <a class="version-link" href="../">← 안정 버전으로 돌아가기</a>
-      <label class="check"><input type="checkbox" id="optTimer" checked> 제한 시간 사용 (기본 45초 / 심화 90초)</label>
-
-      <section class="mode">
-        <h2 class="mode-title">🖥️ 한 기기로 하기</h2>
-        <div class="setup-players" id="setupPlayers"></div>
-        <button class="primary big" id="btnStart">게임 시작 ▶</button>
-      </section>
-
-      <section class="mode">
-        <h2 class="mode-title">🌐 온라인 사설방</h2>
-        <p class="muted small" id="onlineNote">온라인 연결 확인 중…</p>
-        <div class="online-form" id="onlineForm" hidden>
-          <label class="field-label" for="nick">내 닉네임</label>
-          <input id="nick" maxlength="10" placeholder="예: 미분왕" autocomplete="nickname">
-          <button id="btnRestore" hidden></button>
-          <div class="online-actions">
-            <button class="primary" id="btnCreate">방 만들기</button>
-            <div class="join-row">
-              <input id="joinCode" maxlength="4" placeholder="방 코드" autocapitalize="characters" autocomplete="off" aria-label="방 코드 4자리">
-              <button id="btnJoin">참가</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <button class="ghost" id="btnRules2">📖 규칙 보기</button>
-    </div>
-  </div>
-
-  <!-- 온라인 대기실 -->
-  <div class="overlay hidden" id="lobby"></div>
-
-  <!-- 차례 넘기기 -->
-  <div class="overlay hidden" id="handover"></div>
-
-  <!-- 범용 모달 -->
-  <div class="overlay hidden" id="modal"><div class="card" id="modalCard"></div></div>
-
-  <script src="../vendor/mqtt/mqtt.min.js"></script>
-  <script src="js/problems.js"></script>
-  <script src="js/game.js"></script>
+  <p>베타 버전이 정식 버전이 되었어요. <a href="../">새 주소로 이동</a></p>
 </body>
 </html>
