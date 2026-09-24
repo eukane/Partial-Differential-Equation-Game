@@ -17,6 +17,7 @@
       <div class="top-actions">
         <button id="btnView" class="ghost" title="플레이어 시점 / 전체 보기 전환 (V)">🧭 전체 보기</button>
         <button id="btnRules" class="ghost">📖 규칙</button>
+        <button id="btnLeave" class="ghost" hidden>🚪 방 나가기</button>
       </div>
     </header>
 
@@ -46,13 +47,38 @@
   <div class="overlay" id="setup">
     <div class="card setup-card">
       <h1>∂ 미분 배틀</h1>
-      <p class="muted">미적분 문제를 맞혀 공격하고, 움직이고, 살아남아라! · 한 기기에서 3인 턴제</p>
-      <div class="setup-players" id="setupPlayers"></div>
+      <p class="muted">미적분 문제를 맞혀 공격하고, 움직이고, 살아남아라! · 3인 턴제</p>
       <label class="check"><input type="checkbox" id="optTimer" checked> 제한 시간 사용 (기본 45초 / 심화 75초)</label>
-      <button class="primary big" id="btnStart">게임 시작 ▶</button>
+
+      <section class="mode">
+        <h2 class="mode-title">🖥️ 한 기기로 하기</h2>
+        <div class="setup-players" id="setupPlayers"></div>
+        <button class="primary big" id="btnStart">게임 시작 ▶</button>
+      </section>
+
+      <section class="mode">
+        <h2 class="mode-title">🌐 온라인 사설방</h2>
+        <p class="muted small" id="onlineNote">온라인 연결 확인 중…</p>
+        <div class="online-form" id="onlineForm" hidden>
+          <label class="field-label" for="nick">내 닉네임</label>
+          <input id="nick" maxlength="10" placeholder="예: 미분왕" autocomplete="nickname">
+          <button id="btnRestore" hidden></button>
+          <div class="online-actions">
+            <button class="primary" id="btnCreate">방 만들기</button>
+            <div class="join-row">
+              <input id="joinCode" maxlength="4" placeholder="방 코드" autocapitalize="characters" autocomplete="off" aria-label="방 코드 4자리">
+              <button id="btnJoin">참가</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <button class="ghost" id="btnRules2">📖 규칙 보기</button>
     </div>
   </div>
+
+  <!-- 온라인 대기실 -->
+  <div class="overlay hidden" id="lobby"></div>
 
   <!-- 차례 넘기기 -->
   <div class="overlay hidden" id="handover"></div>

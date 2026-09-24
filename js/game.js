@@ -4,6 +4,11 @@
  * 턴 흐름: 차례 넘기기 화면 → 카메라가 해당 플레이어 시점으로 이동
  *        → 행동 선택 → 난이도 선택 → 수학 문제 → 정답이면 행동 실행 → 다음 플레이어
  * 시점 전환은 문제 없이 자유롭게 할 수 있다.
+ *
+ * 온라인 사설방: 방장(host)이 게임 상태의 기준이다. 모든 행동은 act 객체
+ * { key, level, ok, dist, dir, seed … } 로 표현되고, 방장이 room presence 에
+ * "행동 직전 상태(base) + act" 를 올리면 모든 화면이 같은 seed 의 난수로
+ * 같은 결과·같은 애니메이션을 재생한다(lockstep).
  */
 (() => {
   'use strict';
@@ -68,13 +73,26 @@
     rotStart: 0,
     keyHandler: null,
     cell: 60,
+    applying: false,  // act 재생 중
+    online: null,     // 온라인 방 상태 (없으면 한 기기 모드)
   };
 
   const $ = s => document.querySelector(s);
   const el = {};
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const rand = n => Math.floor(Math.random() * n);
+  // 게임 결과에 영향을 주는 난수는 rng() 로만 뽑는다 (온라인에서 seed 로 재현)
+  let rng = Math.random;
+  const rand = n => Math.floor(rng() * n);
+  function mulberry32(a) {
+    return () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const newSeed = () => Math.floor(Math.random() * 2 ** 31);
   const inB = (x, y) => x >= 0 && x < N && y >= 0 && y < N;
   const coord = (x, y) => 'ABCDEFGH'[x] + (N - y);
   const cur = () => S.players[S.turn];
@@ -82,6 +100,7 @@
   const enemies = p => S.players.filter(q => q.alive && q !== p);
   const at = (x, y, except) => S.players.find(p => p.alive && p !== except && p.x === x && p.y === y) || null;
   const dirIdx = (dx, dy) => DIRS.findIndex(d => d[0] === dx && d[1] === dy);
+  const myTurn = () => !S.online || S.online.mySeat === S.turn;
   const tag = p => `<span class="who" style="--pc:${p.color}">${p.emoji} ${esc(p.name)}</span>`;
 
   // ------------------------------------------------------------------
@@ -105,7 +124,7 @@
       stage: $('#stage'), board: $('#board'), cells: $('#cells'), fx: $('#fx'), pieces: $('#pieces'),
       compass: $('#compass .needle'), toast: $('#toast'), playerList: $('#playerList'),
       turnPanel: $('#turnPanel'), log: $('#log'), roundInfo: $('#roundInfo'),
-      setup: $('#setup'), handover: $('#handover'), modal: $('#modal'), modalCard: $('#modalCard'),
+      setup: $('#setup'), handover: $('#handover'), lobby: $('#lobby'), modal: $('#modal'), modalCard: $('#modalCard'),
     });
 
     // 체스판 칸
@@ -130,6 +149,8 @@
     $('#btnRules').onclick = showRules;
     $('#btnRules2').onclick = showRules;
     $('#btnView').onclick = toggleView;
+    $('#btnLeave').onclick = () => Net.leave();
+    Net.init();
 
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', layout);
@@ -146,6 +167,7 @@
   }
 
   function startGame() {
+    S.online = null;
     S.players = PRESETS.map((p, i) => makePlayer(p, i, ($(`#pname${i}`).value || p.name).trim() || p.name));
     S.timer = $('#optTimer').checked;
     S.turn = 0; S.round = 1; S.extra = false; S.extraActive = false;
@@ -215,7 +237,7 @@
       <div class="pcard ${p === cur() && S.phase !== 'over' ? 'active' : ''} ${p.alive ? '' : 'dead'}" style="--pc:${p.color}">
         <span class="pemoji">${p.emoji}</span>
         <div class="pinfo">
-          <div class="pname">${esc(p.name)} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}</div>
+          <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
           <div class="hp"><div class="hp-fill" style="width:${p.hp}%"></div></div>
         </div>
         <span class="hpnum">${p.alive ? p.hp : '탈락'}</span>
@@ -256,6 +278,17 @@
         <div><b>${esc(p.name)}</b> 차례 ${S.extraActive ? '<span class="chip extra">⏩ 추가 행동</span>' : ''}<br>
         <small>${coord(p.x, p.y)} · 바라보는 방향 ${ARROWS[p.dir]} ${DIR_NAMES[p.dir]}</small></div>
       </div>`;
+
+    if (!myTurn()) {
+      const doing = Net.seatStatus(S.turn);
+      el.turnPanel.innerHTML = head + `
+        <div class="waiting">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span>${S.phase === 'busy' && S.applying ? '행동 진행 중…' : doing ? esc(doing) : `${esc(p.name)} 님이 고르는 중…`}</span>
+        </div>
+        <p class="hint">내 차례가 되면 여기에 행동 버튼이 나타나요.</p>`;
+      return;
+    }
 
     if (S.phase === 'rotate') {
       el.turnPanel.innerHTML = head + `
@@ -444,7 +477,15 @@
     } while (!S.players[i].alive);
     S.turn = i;
     await sleep(350);
-    showHandover();
+    if (S.online) startOnlineTurn();
+    else showHandover();
+  }
+
+  function startOnlineTurn() {
+    S.phase = 'choose';
+    renderAll();
+    const p = cur();
+    toast(myTurn() ? '🔔 내 차례!' : `${p.emoji} ${p.name} 차례`);
   }
 
   function checkWin() {
@@ -461,15 +502,27 @@
         <p class="muted">${S.round} 라운드 만에 결판이 났습니다.</p>
         <div class="rules"><table><tr><th>플레이어</th><th>HP</th><th>정답/시도</th></tr>${stats}</table></div>
         <p></p>
-        <button class="primary big" id="btnAgain">다시 하기 ↻</button>
+        ${!S.online ? '<button class="primary big" id="btnAgain">다시 하기 ↻</button>'
+          : S.online.host ? '<button class="primary big" id="btnAgain">같은 방에서 한 판 더 ↻</button>'
+          : '<p class="muted">방장이 한 판 더를 누르면 바로 이어집니다.</p>'}
+        ${S.online ? '<button class="ghost wide" id="btnOut">방 나가기</button>' : ''}
       </div>`, 'small');
-    c.querySelector('#btnAgain').onclick = () => { closeModal(); el.setup.classList.remove('hidden'); S.phase = 'setup'; renderAll(); };
+    const again = c.querySelector('#btnAgain');
+    if (again) {
+      again.onclick = () => {
+        if (S.online) { Net.submit({ key: 'restart' }); return; }
+        closeModal(); el.setup.classList.remove('hidden'); S.phase = 'setup'; renderAll();
+      };
+    }
+    const out = c.querySelector('#btnOut');
+    if (out) out.onclick = () => { closeModal(); Net.leave(); };
     log(w ? `🏆 ${tag(w)} 최종 승리!` : '🤝 무승부!');
     return true;
   }
 
   // ---------------- 시점 전환 (무료) ----------------
   function rotateBy(delta) {
+    if (!myTurn()) return;
     const p = cur();
     if (S.phase === 'choose') { S.phase = 'rotate'; S.rotStart = p.dir; }
     if (S.phase !== 'rotate') return;
@@ -478,14 +531,13 @@
   }
   function finishRotate() {
     const p = cur();
-    if (p.dir !== S.rotStart) log(`${tag(p)} 🔄 시점 전환: ${DIR_NAMES[S.rotStart]} → ${DIR_NAMES[p.dir]}`);
-    S.phase = 'choose';
-    renderAll();
+    if (p.dir === S.rotStart) { S.phase = 'choose'; renderAll(); return; }
+    submit({ key: 'face', dir: p.dir, from: S.rotStart });
   }
 
   // ---------------- 행동 선택 ----------------
   async function onAction(key) {
-    if (S.phase !== 'choose') return;
+    if (S.phase !== 'choose' || !myTurn()) return;
     const p = cur();
     if (key === 'rotate') { S.phase = 'rotate'; S.rotStart = p.dir; renderAll(); return; }
 
@@ -494,24 +546,66 @@
     S.phase = 'busy';
     renderAll();
 
-    const ok = await runQuiz(level);
-    if (!ok) {
-      await endTurn();
-      return;
+    Net.status(`${ACTIONS[key].icon} ${ACTIONS[key].name} · ${LEVELS[level].label} 문제 푸는 중…`);
+    const q = await runQuiz(level);
+    const act = { key, level, ok: q.ok, topic: q.topic, to: q.timeout ? 1 : 0 };
+    if (q.ok && key === 'move') {
+      Net.status('👣 이동 거리 고르는 중…');
+      act.dist = await pickDistance(p, ACTIONS.move.max[level]);
     }
-    await perform(key, level);
-    renderAll();
-    if (checkWin()) return;
-    if (!p.alive) { await endTurn(); return; }
-    if (S.extra) {
-      S.extra = false;
-      S.extraActive = true;
-      S.phase = 'choose';
+    Net.status(null);
+    submit(act);
+  }
+
+  /** 행동 확정: 한 기기 모드는 바로 실행, 온라인은 방장을 거쳐 모두에게 */
+  function submit(act) {
+    if (S.online) { Net.submit(act); return; }
+    act.seed = newSeed();
+    applyAct(act);
+  }
+
+  /** act 하나를 재생한다. 같은 상태 + 같은 act(seed) 면 모든 화면에서 결과가 같다. */
+  async function applyAct(act) {
+    S.applying = true;
+    rng = mulberry32(act.seed | 0);
+    try {
+      if (act.key === 'restart') { restartOnline(); return; }
+      const p = cur();
+      if (act.key === 'face') {
+        log(`${tag(p)} 🔄 시점 전환: ${DIR_NAMES[act.from]} → ${DIR_NAMES[act.dir]}`);
+        p.dir = act.dir;
+        S.phase = 'choose';
+        renderAll();
+        return;
+      }
+      S.phase = 'busy';
+      p.tries++;
+      if (act.ok) p.correct++;
+      log(`${tag(p)} ${LEVELS[act.level].label} 문제(${esc(act.topic || '')}) ${act.ok ? '✅ 정답' : act.to ? '⏰ 시간 초과' : '❌ 오답'}`);
       renderAll();
-      toast('⏩ 추가 행동!');
-      return;
+      if (!act.ok) {
+        if (S.online && !myTurn()) toast(`❌ ${p.emoji} ${p.name} 오답`);
+        await endTurn();
+        return;
+      }
+      await perform(act.key, act.level, act.dist);
+      renderAll();
+      if (checkWin()) return;
+      if (!p.alive) { await endTurn(); return; }
+      if (S.extra) {
+        S.extra = false;
+        S.extraActive = true;
+        S.phase = 'choose';
+        renderAll();
+        toast('⏩ 추가 행동!');
+        return;
+      }
+      await endTurn();
+    } finally {
+      rng = Math.random;
+      S.applying = false;
+      Net.afterApply();
     }
-    await endTurn();
   }
 
   function pickLevel(key) {
@@ -543,7 +637,6 @@
     const P = window.MathProblems.generate(level);
     const L = LEVELS[level];
     const p = cur();
-    p.tries++;
     return new Promise(resolve => {
       const c = openModal(`
         <div class="quiz-head">
@@ -567,7 +660,6 @@
         done = true;
         clearInterval(timerId);
         const ok = i === P.answer;
-        if (ok) p.correct++;
         buttons.forEach((b, j) => {
           b.disabled = true;
           if (j === P.answer) b.classList.add('correct');
@@ -581,9 +673,8 @@
         fb.classList.remove('hidden');
         const next = fb.querySelector('#qNext');
         next.focus();
-        log(`${tag(p)} ${L.label} 문제(${esc(P.topic)}) ${ok ? '✅ 정답' : i === -1 ? '⏰ 시간 초과' : '❌ 오답'}`);
         S.keyHandler = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); next.click(); } };
-        next.onclick = () => { closeModal(); resolve(ok); };
+        next.onclick = () => { closeModal(); resolve({ ok, topic: P.topic, timeout: i === -1 }); };
       };
 
       buttons.forEach((b, i) => { b.onclick = () => finish(i); });
@@ -608,15 +699,13 @@
     });
   }
 
-  async function perform(key, level) {
+  async function perform(key, level, dist) {
     const p = cur();
     renderGuide();
     if (key === 'aim') await doAim(p, level);
     else if (key === 'scatter') await doScatter(p, level);
-    else if (key === 'move') {
-      const d = await pickDistance(p, ACTIONS.move.max[level]);
-      await doMove(p, d);
-    } else if (key === 'box') await doBox(p, level);
+    else if (key === 'move') await doMove(p, dist);
+    else if (key === 'box') await doBox(p, level);
     await sleep(400);
   }
 
@@ -835,7 +924,7 @@
   // ------------------------------------------------------------------
   function weighted(pool) {
     const total = pool.reduce((s, b) => s + b.w, 0);
-    let r = Math.random() * total;
+    let r = rng() * total;
     for (const b of pool) { r -= b.w; if (r < 0) return b; }
     return pool[pool.length - 1];
   }
@@ -850,7 +939,7 @@
       <button class="primary full hidden">확인</button>`, 'small');
     const slot = c.querySelector('.slot');
     for (let i = 0; i < 16; i++) {
-      slot.textContent = pool[rand(pool.length)].icon;
+      slot.textContent = pool[Math.floor(Math.random() * pool.length)].icon; // 연출용 (결과와 무관)
       await sleep(55 + i * 10);
     }
     slot.textContent = res.icon;
@@ -862,7 +951,11 @@
     const ok = c.querySelector('.primary');
     ok.classList.remove('hidden');
     ok.focus();
-    await new Promise(r => { ok.onclick = r; S.keyHandler = e => { if (e.key === 'Enter') { e.preventDefault(); r(); } }; });
+    await new Promise(r => {
+      ok.onclick = r;
+      S.keyHandler = e => { if (e.key === 'Enter') { e.preventDefault(); r(); } };
+      if (S.online) setTimeout(r, 1800); // 온라인: 모두의 화면이 멈추지 않도록 자동 진행
+    });
     closeModal();
     log(`${tag(p)} 🎁 랜덤박스: ${res.icon} ${res.name}`);
     await applyBox(p, res);
@@ -935,6 +1028,413 @@
   }
 
   // ------------------------------------------------------------------
+  //  온라인 사설방
+  // ------------------------------------------------------------------
+  // 공개된 게임 페이지 주소. 초대 링크 = 이 주소 + '#방코드'
+  const INVITE_BASE = 'https://claude.ai/artifact/2E2sjbN9FEvtqU8FMwpNie';
+  const APP = 'pdeb';
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const HOST_SAVE = 'pdeb-host';
+  const ACT_KEYS = ['aim', 'scatter', 'move', 'box', 'face', 'restart'];
+
+  const cleanText = (v, max) => String(v == null ? '' : v)
+    .replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '')
+    .trim().slice(0, max);
+  const int = (v, lo, hi, d = lo) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 저장 불가 환경 */ } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
+  };
+
+  /** 게임 상태 직렬화 (presence 4KiB 안에 들어가도록 숫자 배열로) */
+  function snapshot() {
+    return {
+      t: S.turn, r: S.round, x: S.extraActive ? 1 : 0,
+      p: S.players.map(p => [p.x, p.y, p.dir, p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries]),
+    };
+  }
+  function loadSnapshot(b) {
+    if (!b || !Array.isArray(b.p)) return;
+    S.turn = int(b.t, 0, S.players.length - 1);
+    S.round = int(b.r, 1, 9999, 1);
+    S.extra = false;
+    S.extraActive = !!b.x;
+    b.p.forEach((a, i) => {
+      const p = S.players[i];
+      if (!p || !Array.isArray(a)) return;
+      p.x = int(a[0], 0, N - 1); p.y = int(a[1], 0, N - 1); p.dir = int(a[2], 0, 7);
+      p.hp = int(a[3], 0, MAX_HP); p.alive = !!a[4] && p.hp > 0; p.shield = !!a[5]; p.power = !!a[6];
+      p.correct = int(a[7], 0, 9999); p.tries = int(a[8], 0, 9999);
+    });
+  }
+  /** 다른 사람이 보낸 act 는 믿지 않고 형식을 맞춘다 */
+  function cleanAct(a) {
+    if (!a || !ACT_KEYS.includes(a.key)) return null;
+    const act = { key: a.key, seq: int(a.seq, 0, 1e9), seed: int(a.seed, 0, 2 ** 31) };
+    if (a.key === 'face') { act.dir = int(a.dir, 0, 7); act.from = int(a.from, 0, 7); }
+    if (['aim', 'scatter', 'move', 'box'].includes(a.key)) {
+      act.level = a.level === 'hard' ? 'hard' : 'easy';
+      act.ok = !!a.ok;
+      act.to = a.to ? 1 : 0;
+      act.topic = cleanText(a.topic, 24);
+      if (a.key === 'move') act.dist = int(a.dist, 1, ACTIONS.move.max[act.level]);
+    }
+    return act;
+  }
+
+  function restartOnline() {
+    const names = S.players.map(p => p.name);
+    S.players = names.map((n, i) => makePlayer(PRESETS[i], i, n));
+    S.turn = 0; S.round = 1; S.extra = false; S.extraActive = false;
+    closeModal();
+    el.pieces.innerHTML = '';
+    el.log.innerHTML = '';
+    log('🎮 새 판 시작!');
+    startOnlineTurn();
+  }
+
+  const Net = {
+    room: null,
+    uid: null,       // 이 브라우저의 고유 키 (자리 찾기용)
+    byId: null,      // 플랫폼이 보증하는 사용자 id (있으면 우선)
+    nick: '',
+    hostMissingSince: 0,
+
+    async init() {
+      const note = $('#onlineNote');
+      let saved = store.get('pdeb-uid');
+      if (!saved) { saved = 'k' + Math.random().toString(36).slice(2, 12); store.set('pdeb-uid', saved); }
+      this.uid = saved;
+      $('#nick').value = store.get('pdeb-nick') || '';
+      const hash = (location.hash || '').replace('#', '').toUpperCase();
+      if (/^[A-Z0-9]{4}$/.test(hash)) $('#joinCode').value = hash;
+
+      if (!window.claude || typeof window.claude.use !== 'function') {
+        note.textContent = '온라인 방은 claude.ai 게임 링크에서 열었을 때만 쓸 수 있어요.';
+        return;
+      }
+      const [room, user] = await Promise.all([window.claude.use('room'), window.claude.use('user')]);
+      if (!room) {
+        note.textContent = '지금은 온라인 방에 연결할 수 없어요. 한 기기 모드는 그대로 쓸 수 있어요.';
+        return;
+      }
+      this.room = room;
+      this.byId = user ? await user.id() : null;
+      room.onPeers(() => this.onPeers(), () => { this.room = null; if (S.online) toast('온라인 연결이 끊겼어요', 3000); });
+      $('#onlineForm').hidden = false;
+      note.textContent = '방을 만들고 초대 링크를 보내거나, 받은 방 코드로 참가하세요.';
+      $('#btnCreate').onclick = () => this.create();
+      $('#btnJoin').onclick = () => this.join();
+      $('#joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') this.join(); });
+      const h = store.get(HOST_SAVE);
+      if (h && h.code && Date.now() - (h.at || 0) < 3 * 3600e3) {
+        const b = $('#btnRestore');
+        b.hidden = false;
+        b.textContent = `↩ 진행 중이던 방 ${h.code} 다시 열기`;
+        b.onclick = () => this.restore(h);
+      }
+      if (hash) $('#nick').focus();
+    },
+
+    myKey() { return this.byId || this.uid; },
+    keyOf(peer) { return peer.by || cleanText(peer.presence && peer.presence.uid, 40) || peer.peer; },
+    peersInRoom() {
+      if (!this.room || !S.online) return [];
+      return this.room.peers().filter(p => p.presence && p.presence.app === APP && p.presence.room === S.online.code && !p.sameTab);
+    },
+    hostPeer() { return this.peersInRoom().find(p => p.presence.role === 'host') || null; },
+    peerOfSeat(i) {
+      const seat = S.online && S.online.seats[i];
+      if (!seat) return null;
+      return this.peersInRoom().find(p => this.keyOf(p) === seat.k) || null;
+    },
+    seatOnline(i) {
+      if (!S.online) return true;
+      if (i === S.online.mySeat) return true;
+      return !!this.peerOfSeat(i);
+    },
+    seatStatus(i) {
+      const p = this.peerOfSeat(i);
+      return p ? cleanText(p.presence.doing, 60) : '';
+    },
+    status(text) {
+      if (this.room && S.online) this.room.presence({ doing: text || null }).catch(() => {});
+    },
+    readNick() {
+      const n = cleanText($('#nick').value, 10);
+      if (!n) { $('#nick').focus(); toast('닉네임을 먼저 적어 주세요'); return null; }
+      store.set('pdeb-nick', n);
+      this.nick = n;
+      return n;
+    },
+
+    // ---------- 방장 ----------
+    create() {
+      if (!this.readNick()) return;
+      let code = '';
+      for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked };
+      this.publish();
+      showLobby();
+    },
+    restore(h) {
+      this.nick = cleanText(h.nick, 10) || '방장';
+      const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
+      if (!seats.length) return;
+      seats[0].k = this.myKey();
+      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer };
+      if (S.online.phase === 'game') {
+        this.enterGame();
+        loadSnapshot(h.cur);
+        S.online.base = snapshot();
+        this.publish();
+        startOnlineTurn();
+        log('↩ 방을 다시 열었어요.');
+      } else {
+        this.publish();
+        showLobby();
+      }
+    },
+    publish() {
+      const o = S.online;
+      this.room.presence({
+        app: APP, room: o.code, role: 'host', uid: this.uid, nick: this.nick,
+        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, act: o.act, tm: o.timer ? 1 : 0, req: null,
+      }).catch(() => toast('방 정보를 보내지 못했어요', 2500));
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
+    },
+    startGame() {
+      const o = S.online;
+      if (!o || !o.host || o.seats.length < 2) return;
+      o.phase = 'game';
+      this.enterGame();
+      o.seq = 0; o.act = null; o.base = snapshot();
+      this.publish();
+      log('🎮 게임 시작! 문제를 맞혀 행동하세요.');
+      startOnlineTurn();
+    },
+    accept(a) {
+      const o = S.online;
+      const act = cleanAct({ ...a, seq: o.seq + 1, seed: newSeed() });
+      if (!act) return;
+      o.base = snapshot();
+      o.act = act;
+      o.seq = act.seq;
+      this.publish();
+      applyAct(act);
+    },
+    hostScan() {
+      const o = S.online;
+      if (!o || !o.host || o.phase !== 'game' || S.applying || !['choose', 'rotate', 'over'].includes(S.phase)) return;
+      for (const p of this.peersInRoom()) {
+        const r = p.presence.req;
+        if (!r || int(r.seq, 0, 1e9) !== o.seq + 1) continue;
+        const seat = o.seats.findIndex(x => x.k === this.keyOf(p));
+        if (seat !== S.turn || r.key === 'restart') continue;
+        this.accept(r);
+        return;
+      }
+    },
+
+    // ---------- 참가자 ----------
+    join() {
+      const code = cleanText($('#joinCode').value, 4).toUpperCase();
+      if (!/^[A-Z0-9]{4}$/.test(code)) { $('#joinCode').focus(); toast('방 코드 4자리를 입력하세요'); return; }
+      if (!this.readNick()) return;
+      S.online = { code, host: false, seats: [], mySeat: -1, phase: 'joining', seq: -1, pending: null, timer: true };
+      this.room.presence({ app: APP, room: code, role: 'guest', uid: this.uid, nick: this.nick, join: 1, req: null, doing: null })
+        .catch(() => toast('방에 신호를 보내지 못했어요', 2500));
+      showLobby();
+      setTimeout(() => {
+        if (S.online && S.online.code === code && S.online.phase === 'joining') renderLobby('방 ' + code + '을(를) 찾지 못했어요. 코드가 맞는지, 방장이 게임 페이지를 열어 두었는지 확인하세요.');
+      }, 6000);
+    },
+    guestSync() {
+      const o = S.online;
+      const hp = this.hostPeer();
+      if (!hp) {
+        if (o.phase === 'game' && !this.hostMissingSince) {
+          this.hostMissingSince = Date.now();
+          setTimeout(() => { if (S.online && !this.hostPeer()) toast('방장 연결이 끊겼어요. 방장이 돌아오면 이어집니다.', 4000); }, 2500);
+        }
+        return;
+      }
+      this.hostMissingSince = 0;
+      const h = hp.presence;
+      o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, 3).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어' }));
+      o.mySeat = o.seats.findIndex(x => x.k === this.myKey());
+      o.timer = !!h.tm;
+      if (h.ph === 'lobby') {
+        if (o.phase === 'game') { toast('방장이 방을 새로 열었어요'); }
+        o.phase = 'lobby';
+        renderLobby();
+        return;
+      }
+      if (h.ph !== 'game') return;
+      if (o.phase !== 'game') {
+        o.phase = 'game';
+        this.enterGame();
+        o.seq = -1;
+      }
+      const seq = int(h.seq, 0, 1e9);
+      if (seq > o.seq) { o.pending = { seq, base: h.base, act: h.act }; this.processPending(); }
+      else renderAll();
+    },
+    processPending() {
+      const o = S.online;
+      if (!o || o.host || !o.pending || S.applying) return;
+      const h = o.pending;
+      o.pending = null;
+      loadSnapshot(h.base);
+      o.seq = h.seq;
+      const act = cleanAct(h.act);
+      if (!act || h.seq === 0) { startOnlineTurn(); return; }
+      applyAct(act);
+    },
+    submit(a) {
+      const o = S.online;
+      if (o.host) { this.accept(a); return; }
+      const req = { ...a, seq: o.seq + 1, n: Date.now() % 1e9 };
+      S.phase = 'busy';
+      renderAll();
+      this.room.presence({ req }).catch(() => {});
+      // 방장이 못 받았으면 두 번까지 다시 보낸다
+      let tries = 0;
+      const retry = () => {
+        if (!S.online || S.online.seq >= req.seq) return;
+        if (++tries > 2) { S.phase = 'choose'; renderAll(); toast('방장에게 전달되지 않았어요. 다시 해 주세요.', 3000); return; }
+        req.n = Date.now() % 1e9;
+        this.room.presence({ req: { ...req } }).catch(() => {});
+        setTimeout(retry, 5000);
+      };
+      setTimeout(retry, 5000);
+    },
+
+    // ---------- 공통 ----------
+    enterGame() {
+      const o = S.online;
+      S.timer = o.timer;
+      S.players = o.seats.map((x, i) => makePlayer(PRESETS[i], i, x.n));
+      S.turn = 0; S.round = 1; S.extra = false; S.extraActive = false;
+      el.pieces.innerHTML = '';
+      el.log.innerHTML = '';
+      el.setup.classList.add('hidden');
+      el.lobby.classList.add('hidden');
+      $('#btnLeave').hidden = false;
+      if (o.mySeat < 0) log('👀 관전 중이에요. (자리가 다 찼어요)');
+    },
+    onPeers() {
+      const o = S.online;
+      if (!o) return;
+      if (o.host) {
+        if (o.phase === 'lobby') {
+          let changed = false;
+          const here = this.peersInRoom();
+          for (const p of here) {
+            if (p.presence.role !== 'guest' || !p.presence.join) continue;
+            const k = this.keyOf(p);
+            const seat = o.seats.find(x => x.k === k);
+            const n = cleanText(p.presence.nick, 10) || '플레이어';
+            if (seat) { if (seat.n !== n) { seat.n = n; changed = true; } }
+            else if (o.seats.length < 3) { o.seats.push({ k, n }); changed = true; }
+          }
+          // 로비에서 나간 사람은 자리에서 뺀다
+          const keys = new Set(here.map(p => this.keyOf(p)));
+          const kept = o.seats.filter((x, i) => i === 0 || keys.has(x.k));
+          if (kept.length !== o.seats.length) { o.seats = kept; changed = true; }
+          if (changed) this.publish();
+          renderLobby();
+        } else {
+          this.hostScan();
+          if (!S.applying) { renderPlayers(); renderTurn(); }
+        }
+      } else {
+        this.guestSync();
+        if (o.phase === 'game' && !S.applying) { renderPlayers(); renderTurn(); }
+      }
+    },
+    afterApply() {
+      const o = S.online;
+      if (!o) return;
+      if (o.host) { this.publishSaveOnly(); this.hostScan(); }
+      else this.processPending();
+    },
+    publishSaveOnly() {
+      const o = S.online;
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, cur: snapshot(), at: Date.now() });
+    },
+    leave() {
+      if (this.room) {
+        this.room.presence({ app: null, room: null, role: null, seats: null, base: null, act: null, req: null, doing: null, join: null, ph: null, seq: null }).catch(() => {});
+      }
+      if (S.online && S.online.host) store.del(HOST_SAVE);
+      S.online = null;
+      closeModal();
+      el.lobby.classList.add('hidden');
+      $('#btnLeave').hidden = true;
+      $('#btnRestore').hidden = true;
+      S.phase = 'setup';
+      S.players = PRESETS.map((p, i) => makePlayer(p, i, p.name));
+      el.pieces.innerHTML = '';
+      renderAll();
+      el.setup.classList.remove('hidden');
+    },
+  };
+
+  // ---------- 대기실 화면 ----------
+  function showLobby() {
+    el.setup.classList.add('hidden');
+    el.lobby.classList.remove('hidden');
+    renderLobby();
+  }
+  function renderLobby(message) {
+    const o = S.online;
+    if (!o || o.phase === 'game') return;
+    const link = `${INVITE_BASE}#${o.code}`;
+    const seats = [0, 1, 2].map(i => {
+      const x = o.seats[i];
+      const pr = PRESETS[i];
+      const me = x && (o.host ? i === 0 : x.k === Net.myKey());
+      return `<li class="seat ${x ? 'filled' : ''}" style="--pc:${pr.color}">
+        <span class="seat-emoji">${x ? pr.emoji : '·'}</span>
+        <span class="seat-name">${x ? esc(x.n) : '빈 자리'}</span>
+        ${x && i === 0 ? '<span class="chip host">방장</span>' : ''}${me ? '<span class="chip me">나</span>' : ''}
+      </li>`;
+    }).join('');
+    const waitingHost = !o.host && o.phase === 'joining';
+    const full = !o.host && o.phase === 'lobby' && o.mySeat < 0;
+    el.lobby.innerHTML = `
+      <div class="card small lobby-card">
+        <p class="eyebrow">온라인 사설방</p>
+        <div class="room-code" aria-label="방 코드">${o.code.split('').map(c => `<span>${c}</span>`).join('')}</div>
+        ${o.host ? `
+          <label class="field-label" for="inviteLink">초대 링크 (친구에게 보내면 코드가 자동으로 입력돼요)</label>
+          <div class="copy-row"><input id="inviteLink" readonly value="${esc(link)}"><button id="btnCopy">복사</button></div>` : ''}
+        <ul class="seats">${seats}</ul>
+        <p class="lobby-msg">${message ? esc(message)
+          : waitingHost ? '방을 찾는 중…'
+          : full ? '자리가 다 찼어요. 게임이 시작되면 관전할 수 있어요.'
+          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… (2~3명)' : `${o.seats.length}명 모였어요. 시작할 수 있어요.`)
+          : '방장이 시작하길 기다리는 중…'}</p>
+        ${o.host ? `<button class="primary big" id="btnBegin" ${o.seats.length < 2 ? 'disabled' : ''}>게임 시작 ▶</button>` : ''}
+        <button class="ghost wide" id="btnLobbyLeave">나가기</button>
+      </div>`;
+    const copy = $('#btnCopy');
+    if (copy) {
+      copy.onclick = () => {
+        const inp = $('#inviteLink');
+        const done = () => { copy.textContent = '복사됨'; setTimeout(() => { copy.textContent = '복사'; }, 1500); };
+        const fallback = () => { inp.focus(); inp.select(); toast('링크를 길게 눌러 복사하세요'); };
+        try { navigator.clipboard.writeText(link).then(done, fallback); } catch (e) { fallback(); }
+      };
+    }
+    const begin = $('#btnBegin');
+    if (begin) begin.onclick = () => Net.startGame();
+    $('#btnLobbyLeave').onclick = () => Net.leave();
+  }
+
+  // ------------------------------------------------------------------
   //  규칙
   // ------------------------------------------------------------------
   function showRules() {
@@ -949,6 +1449,12 @@
           <li>차례가 되면 기기를 넘겨받고 <b>시작</b>을 누르세요. 카메라가 내 말의 시점(바라보는 방향이 화면 위쪽)으로 이동합니다.</li>
           <li>행동을 고르고 <b>기본(고3)</b> 또는 <b>심화(대학 기초)</b> 문제를 풉니다. 맞히면 행동 실행, 틀리면 턴 종료.</li>
           <li><b>시점 전환</b>은 무료입니다. 원하는 만큼 방향을 돌린 뒤 다른 행동을 고르세요.</li>
+        </ul>
+        <h3>온라인 사설방</h3>
+        <ul>
+          <li>방장이 <b>방 만들기</b>를 누르면 4자리 방 코드와 초대 링크가 나옵니다. 링크로 들어오면 코드가 자동으로 채워져요.</li>
+          <li>2~3명이 모이면 방장이 시작합니다. 자리가 찬 뒤 들어온 사람은 관전합니다.</li>
+          <li>각자 자기 기기에서 자기 차례에만 문제를 풉니다. 방장이 페이지를 닫으면 게임이 멈추고, 방장이 같은 기기에서 다시 열어 <b>진행 중이던 방 다시 열기</b>를 누르면 이어집니다.</li>
         </ul>
         <h3>행동</h3>
         <table>
@@ -982,7 +1488,7 @@
       if (S.keyHandler) S.keyHandler(e);
       return;
     }
-    if (!el.handover.classList.contains('hidden')) return;
+    if (!el.handover.classList.contains('hidden') || !el.lobby.classList.contains('hidden')) return;
     if (e.key === 'v' || e.key === 'V') toggleView();
     if (S.phase === 'choose' || S.phase === 'rotate') {
       if (e.key === 'ArrowLeft') { e.preventDefault(); rotateBy(-1); }

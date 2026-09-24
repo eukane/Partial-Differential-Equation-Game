@@ -45,7 +45,7 @@ button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #ffd76
 button.ghost { background: transparent; }
 button.big { font-size: 1.15rem; padding: 12px 22px; }
 .muted { color: var(--muted); }
-.hidden { display: none !important; }
+.hidden, [hidden] { display: none !important; }
 
 #app { display: flex; flex-direction: column; height: 100%; }
 
@@ -327,6 +327,49 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .victory .crown { font-size: 4.5rem; }
 .victory h2 { font-size: 2rem; color: var(--pc); }
 
+/* ---------------- 온라인 ---------------- */
+.mode { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; text-align: left; }
+.mode-title { margin: 0; font-size: 1.05rem; }
+.small { font-size: .85rem; margin: 0; }
+.field-label { font-size: .8rem; color: var(--muted); }
+.online-form { display: flex; flex-direction: column; gap: 8px; }
+.online-form input, .copy-row input, .join-row input {
+  font: inherit; color: var(--text); background: #0f1528; border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 10px; min-width: 0;
+}
+.online-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.join-row { display: flex; gap: 6px; }
+.join-row input { flex: 1; text-transform: uppercase; letter-spacing: .2em; font-weight: 700; text-align: center; }
+#btnRestore { border-style: dashed; }
+.chip.me { background: #2b3f7a; color: #cfe0ff; }
+.chip.host { background: #5a4a10; color: #ffe38a; }
+.chip.off { background: #4a2330; color: #ffb3c0; }
+
+.lobby-card { display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.eyebrow { margin: 0; font-size: .75rem; letter-spacing: .12em; color: var(--muted); }
+.room-code { display: flex; justify-content: center; gap: 8px; }
+.room-code span {
+  width: 54px; height: 64px; display: grid; place-items: center; border-radius: 12px;
+  background: var(--card); border: 1px solid var(--line); font-size: 2rem; font-weight: 900; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.copy-row { display: flex; gap: 6px; }
+.copy-row input { flex: 1; font-size: .8rem; }
+.seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.seat { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--card); border-left: 4px solid var(--line); color: var(--muted); }
+.seat.filled { border-left-color: var(--pc); color: var(--text); }
+.seat-emoji { font-size: 1.4rem; width: 1.6em; text-align: center; }
+.seat-name { flex: 1; font-weight: 700; }
+.lobby-msg { margin: 0; color: var(--muted); font-size: .9rem; }
+
+.waiting { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; background: #151c31; }
+.dots { display: inline-flex; gap: 4px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s; }
+.dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dots i, .piece.current .avatar, .handover-card .ho-emoji { animation: none; } }
+
 /* ---------------- 반응형 ---------------- */
 @media (max-width: 860px) {
   body { overflow: auto; }
@@ -340,7 +383,7 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
   .top-actions button { padding: 6px 8px; font-size: .85rem; }
 }
 @media (max-width: 480px) {
-  .choices, .levels { grid-template-columns: 1fr; }
+  .choices, .levels, .online-actions { grid-template-columns: 1fr; }
   .card { padding: 16px; }
   .question { font-size: 1rem; }
 }
