@@ -179,12 +179,12 @@
     $('#btnRules2').onclick = showRules;
     $('#btnView').onclick = toggleView;
     $('#btnLeave').onclick = () => Net.leave();
-    el.cells.addEventListener('click', e => {
+    el.board.addEventListener('click', e => {
       const c = e.target.closest('.cell');
-      if (c) { onCellClick(+c.dataset.x, +c.dataset.y); return; }
-      // 3D 로 세운 말이 판 평면을 가르면 브라우저가 칸 대신 판(.cells)을 돌려줄 때가 있다.
-      // 이때는 판 기준 좌표(offsetX/Y, 변환 전 좌표계)로 칸을 계산한다.
-      if (e.target === el.cells) {
+      if (c) { if (!c.classList.contains('void')) onCellClick(+c.dataset.x, +c.dataset.y); return; }
+      // 3D 로 세운 말이 판 평면을 가르거나 오각형 가장자리를 누르면 브라우저가 칸 대신 판을 돌려줄 때가 있다.
+      // 이때는 판 기준 좌표(offsetX/Y, 변환 전 좌표계)로 칸을 계산한다. (.cells 와 .board 는 크기·원점이 같다)
+      if (e.target === el.cells || e.target === el.board) {
         const size = el.cells.clientWidth / N;
         const x = Math.floor(e.offsetX / size), y = Math.floor(e.offsetY / size);
         if (inB(x, y)) onCellClick(x, y);
