@@ -15,7 +15,7 @@ python3 -m http.server 8000   # → http://localhost:8000
 
 ## 온라인 사설방 (로그인 필요 없음)
 
-**게임 주소:** https://raw.githack.com/eukane/Partial-Differential-Equation-Game/claude/math-board-game-oeecqv/index.html
+**게임 주소:** https://eukane.github.io/Partial-Differential-Equation-Game/
 
 1. 방장: 위 주소를 열고 닉네임을 적은 뒤 **방 만들기** → 4자리 방 코드와 초대 링크가 나옵니다.
 2. 친구: 초대 링크를 열면 코드가 자동으로 채워져 있습니다. 닉네임만 적고 **참가**. (계정·로그인 필요 없음)
