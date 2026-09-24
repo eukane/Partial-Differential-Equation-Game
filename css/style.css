@@ -474,6 +474,7 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 
 /* ---------------- 메뉴 (휴대폰) ---------------- */
 .menu-btn { display: none; font-size: 1.2rem; padding: 4px 10px; }
+.sound-btn { font-size: 1.05rem; padding: 4px 10px; }
 .drawer { position: fixed; inset: 0; z-index: 30; background: rgba(6, 9, 18, .6); display: flex; justify-content: flex-end; }
 .drawer-card {
   width: min(340px, 86vw); height: 100%; background: var(--bg2); border-left: 1px solid var(--line);

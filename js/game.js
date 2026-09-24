@@ -225,6 +225,12 @@
     $('#mRules').onclick = () => { setMenu(false); showRules(); };
     $('#mView').onclick = () => { setMenu(false); toggleView(); };
     $('#mLeave').onclick = () => { setMenu(false); Net.leave(); };
+    const toggleSound = () => { if (window.Music) { Music.toggle(); renderSound(); } };
+    $('#btnSound').onclick = toggleSound;
+    $('#mSound').onclick = toggleSound;
+    renderSound();
+    // 브라우저는 사용자가 한 번 누르기 전까지 소리를 막는다
+    document.addEventListener('pointerdown', () => { if (window.Music) Music.unlock(); }, true);
     // 패널 높이가 바뀌면(행동 버튼·상태 줄) 보드 영역도 다시 맞춘다
     if (window.ResizeObserver) new ResizeObserver(() => layout()).observe(el.stage);
     el.board.addEventListener('click', e => {
@@ -393,7 +399,24 @@
     renderSpectate();
   }
 
+  /** 배경음악: 지금 차례인 사람(난전은 나)의 체력이 낮으면 긴박한 곡으로 */
+  const PINCH_HP = 0.3;
+  function updateMusic() {
+    if (!window.Music || S.phase === 'over') return;
+    if (S.phase === 'setup' || !S.players.length) { Music.play(null); return; }
+    const p = (brawl() && S.online && S.players[S.online.mySeat]) || cur();
+    Music.play(p && p.alive && p.hp <= S.maxHp * PINCH_HP ? 'pinch' : 'battle');
+  }
+
+  function renderSound() {
+    const on = !(window.Music && Music.muted);
+    $('#btnSound').textContent = on ? '🔊' : '🔇';
+    $('#btnSound').title = on ? '배경음악 끄기' : '배경음악 켜기';
+    $('#mSound').textContent = on ? '🔊 배경음악 켜짐' : '🔇 배경음악 꺼짐';
+  }
+
   function renderPlayers() {
+    updateMusic();
     el.playerList.innerHTML = S.players.map(p => `
       <div class="pcard ${p === cur() && S.phase !== 'over' ? 'active' : ''} ${p.alive ? '' : 'dead'}" style="--pc:${p.color}">
         <span class="pemoji">${p.emoji}</span>
@@ -712,6 +735,7 @@
     if (left.length > 1) return false;
     S.phase = 'over';
     renderAll();
+    if (window.Music) Music.victory();
     const w = left[0];
     const top = Math.max(...S.players.map(p => p.score));
     const stats = S.players.map(p => `<tr><td>${p.emoji} ${esc(p.name)}</td><td>${p.alive ? p.hp : '탈락'}</td><td>${p.correct}/${p.tries}</td><td>${p.score}${p.score === top && top > 0 ? ' 🏅' : ''}</td></tr>`).join('');
@@ -2278,7 +2302,7 @@
           <li><b>📐 기하</b>: 포물선·타원·쌍곡선, 벡터의 크기·내적·사잇각, 공간좌표, 구, 정사영</li>
         </ul>
         <h3>단축키</h3>
-        <ul><li>문제: 1~4 · 과목: Q W E R · 난이도: 1/2 · 증강: 1~3 · 조준: ← → (Shift: 15°) · 전체 보기: V</li></ul>
+        <ul><li>문제: 1~4 · 과목: Q W E R · 난이도: 1/2/3 · 증강: 1~3 · 조준: ← → (Shift: 15°) · 전체 보기: V · 배경음악: M</li></ul>
         <p></p>
         <button class="primary full">닫기</button>
       </div>`);
@@ -2297,6 +2321,7 @@
     }
     if (!el.handover.classList.contains('hidden') || !el.lobby.classList.contains('hidden')) return;
     if (e.key === 'v' || e.key === 'V') toggleView();
+    if (e.key === 'm' || e.key === 'M') $('#btnSound').click();
     if (S.phase === 'choose' && myTurn()) {
       const step = e.shiftKey ? 15 : 5;
       if (e.key === 'ArrowLeft') { e.preventDefault(); setAim(cur().ang - step); }
