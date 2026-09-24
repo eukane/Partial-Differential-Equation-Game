@@ -410,6 +410,11 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .augment em { font-style: normal; font-weight: 800; color: var(--accent); font-size: .85rem; }
 @media (max-width: 560px) { .augments { grid-template-columns: 1fr; } .augment { flex-direction: row; text-align: left; } .aug-icon { font-size: 2rem; } }
 
+.count-row { display: flex; align-items: center; gap: 6px; }
+.count-row span { color: var(--muted); font-size: .85rem; margin-right: 4px; }
+.count-btn { flex: 1; font-weight: 800; padding: 8px 0; }
+.count-btn.sel { border-color: var(--accent); background: #3a3217; }
+
 /* ---------------- 과목 선택 ---------------- */
 .step-label { margin: 12px 0 6px; font-weight: 800; font-size: .9rem; }
 .level-card .levels { margin-top: 0; }

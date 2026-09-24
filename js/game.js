@@ -28,11 +28,19 @@
   const POWER_MULT = 1.5;   // 강화탄 배율 (한 방에 끝나지 않도록 2배 → 1.5배)
   const BUMP_DMG = 10;
 
+  const MAX_PLAYERS = 4;
   const PRESETS = [
-    { name: '레드', color: '#ff5a5f', emoji: '🦊', x: 0, y: 7, dir: 1 },
-    { name: '블루', color: '#4d8dff', emoji: '🐧', x: 7, y: 7, dir: 7 },
-    { name: '그린', color: '#35d07f', emoji: '🐸', x: 3, y: 0, dir: 4 },
+    { name: '레드', color: '#ff5a5f', emoji: '🦊' },
+    { name: '블루', color: '#4d8dff', emoji: '🐧' },
+    { name: '그린', color: '#35d07f', emoji: '🐸' },
+    { name: '퍼플', color: '#b57bff', emoji: '🐙' },
   ];
+  // 인원수별 시작 칸: 서로 같은 줄·대각선·나이트 칸에 겹치지 않는 바람개비 배치
+  const LAYOUTS = {
+    2: [[1, 7], [6, 0]],
+    3: [[1, 7], [7, 5], [3, 0]],
+    4: [[1, 7], [7, 6], [6, 0], [0, 1]],
+  };
 
 
   // 정답 점수 = 난이도 점수 + 속도 점수(남은 시간 비율 × 100)
@@ -155,11 +163,25 @@
     }
 
     // 시작 화면
-    $('#setupPlayers').innerHTML = PRESETS.map((p, i) => `
-      <div class="setup-row" style="--pc:${p.color}">
+    $('#setupPlayers').innerHTML = `
+      <div class="count-row" role="group" aria-label="인원">
+        <span>인원</span>${[2, 3, 4].map(n => `<button class="count-btn" data-n="${n}">${n}명</button>`).join('')}
+      </div>` + PRESETS.map((p, i) => `
+      <div class="setup-row" style="--pc:${p.color}" data-row="${i}">
         <span>${p.emoji}</span>
         <input id="pname${i}" maxlength="10" value="${p.name}" aria-label="플레이어 ${i + 1} 이름">
       </div>`).join('');
+    const setCount = n => {
+      S.localCount = n;
+      document.querySelectorAll('.count-btn').forEach(b => b.classList.toggle('sel', +b.dataset.n === n));
+      document.querySelectorAll('[data-row]').forEach(r => { r.hidden = +r.dataset.row >= n; });
+      if (S.phase === 'setup') {
+        S.players = PRESETS.slice(0, n).map((p, i) => makePlayer(i, p.name, n));
+        el.pieces.innerHTML = '';
+        renderPieces();
+      }
+    };
+    document.querySelectorAll('.count-btn').forEach(b => { b.onclick = () => setCount(+b.dataset.n); });
     $('#btnStart').onclick = startGame;
     $('#btnRules').onclick = showRules;
     $('#btnRules2').onclick = showRules;
@@ -182,19 +204,23 @@
     window.addEventListener('resize', layout);
     layout();
     // 시작 화면 뒤 보드 미리보기
-    S.players = PRESETS.map((p, i) => makePlayer(p, i, p.name));
-    renderPieces();
+    setCount(3);
     updateCamera();
   }
 
-  function makePlayer(p, i, name) {
-    return { id: i, name, color: p.color, emoji: p.emoji, x: p.x, y: p.y, ang: p.dir * 45, style: null,
+  /** i 번째 플레이어 (전체 n명). 처음에는 판 가운데를 바라본다 */
+  function makePlayer(i, name, n) {
+    const p = PRESETS[i];
+    const [x, y] = (LAYOUTS[n] || LAYOUTS[3])[i];
+    const ang = Math.round(normAng(Math.atan2(3.5 - x, -(3.5 - y)) * 180 / Math.PI) / 5) * 5;
+    return { id: i, name, color: p.color, emoji: p.emoji, x, y, ang, style: null,
       hp: MAX_HP, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0 };
   }
 
   function startGame() {
     S.online = null;
-    S.players = PRESETS.map((p, i) => makePlayer(p, i, ($(`#pname${i}`).value || p.name).trim() || p.name));
+    const n = S.localCount || 3;
+    S.players = PRESETS.slice(0, n).map((p, i) => makePlayer(i, ($(`#pname${i}`).value || p.name).trim() || p.name, n));
     S.timer = $('#optTimer').checked;
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     S.gseed = newSeed();
@@ -1321,7 +1347,7 @@
   function restartOnline(seed) {
     S.gseed = seed | 0;
     const names = S.players.map(p => p.name);
-    S.players = names.map((n, i) => makePlayer(PRESETS[i], i, n));
+    S.players = names.map((nm, i) => makePlayer(i, nm, names.length));
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     closeModal();
     el.pieces.innerHTML = '';
@@ -1643,7 +1669,7 @@
       }
       this.hostMissingSince = 0;
       const h = hp.presence;
-      o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, 3).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어' }));
+      o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, MAX_PLAYERS).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어' }));
       o.mySeat = o.seats.findIndex(x => x.k === this.myKey());
       o.timer = !!h.tm;
       if (h.ph === 'lobby') {
@@ -1696,7 +1722,7 @@
     enterGame() {
       const o = S.online;
       S.timer = o.timer;
-      S.players = o.seats.map((x, i) => makePlayer(PRESETS[i], i, x.n));
+      S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length));
       S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
       el.pieces.innerHTML = '';
       el.log.innerHTML = '';
@@ -1718,7 +1744,7 @@
             const seat = o.seats.find(x => x.k === k);
             const n = cleanText(p.presence.nick, 10) || '플레이어';
             if (seat) { if (seat.n !== n) { seat.n = n; changed = true; } }
-            else if (o.seats.length < 3) { o.seats.push({ k, n }); changed = true; }
+            else if (o.seats.length < MAX_PLAYERS) { o.seats.push({ k, n }); changed = true; }
           }
           // 로비에서 나간 사람은 자리에서 뺀다
           const keys = new Set(here.map(p => this.keyOf(p)));
@@ -1758,7 +1784,7 @@
       $('#btnLeave').hidden = true;
       $('#btnRestore').hidden = true;
       S.phase = 'setup';
-      S.players = PRESETS.map((p, i) => makePlayer(p, i, p.name));
+      S.players = PRESETS.slice(0, 3).map((p, i) => makePlayer(i, p.name, 3));
       el.pieces.innerHTML = '';
       renderAll();
       el.setup.classList.remove('hidden');
@@ -1775,7 +1801,7 @@
     const o = S.online;
     if (!o || o.phase === 'game') return;
     const link = Net.inviteLink(o.code);
-    const seats = [0, 1, 2].map(i => {
+    const seats = [...Array(MAX_PLAYERS).keys()].map(i => {
       const x = o.seats[i];
       const pr = PRESETS[i];
       const me = x && (o.host ? i === 0 : x.k === Net.myKey());
@@ -1798,7 +1824,7 @@
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
           : full ? '자리가 다 찼어요. 게임이 시작되면 관전할 수 있어요.'
-          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… (2~3명)' : `${o.seats.length}명 모였어요. 시작할 수 있어요.`)
+          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… (2~4명)' : `${o.seats.length}명 모였어요. 시작할 수 있어요.`)
           : '방장이 시작하길 기다리는 중…'}</p>
         ${o.host ? `<button class="primary big" id="btnBegin" ${o.seats.length < 2 ? 'disabled' : ''}>게임 시작 ▶</button>` : ''}
         <button class="ghost wide" id="btnLobbyLeave">나가기</button>
@@ -1826,7 +1852,7 @@
     const c = openModal(`
       <div class="rules">
         <h2>📖 게임 규칙</h2>
-        <p class="muted">8×8 체스판 위에서 3명이 싸우는 턴제 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
+        <p class="muted">8×8 체스판 위에서 2~4명이 싸우는 턴제 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
         <h3>턴 진행</h3>
         <ul>
           <li>첫 차례에 <b>증강</b>을 고릅니다. 무작위 공격 스타일 ${OFFER_N}개 중 하나를 골라 게임 끝까지 씁니다.</li>
@@ -1851,7 +1877,7 @@
         <h3>온라인 사설방</h3>
         <ul>
           <li>방장이 <b>방 만들기</b>를 누르면 4자리 방 코드와 초대 링크가 나옵니다. 친구는 로그인 없이 링크만 열면 되고, 코드가 자동으로 채워져요.</li>
-          <li>2~3명이 모이면 방장이 시작합니다. 자리가 찬 뒤 들어온 사람은 관전합니다.</li>
+          <li>2~4명이 모이면 방장이 시작합니다. 자리가 찬 뒤 들어온 사람은 관전합니다.</li>
           <li>각자 자기 기기에서 자기 차례에만 문제를 풉니다. 방장이 페이지를 닫으면 게임이 멈추고, 방장이 같은 기기에서 다시 열어 <b>진행 중이던 방 다시 열기</b>를 누르면 이어집니다.</li>
         </ul>
         <h3>문제 범위</h3>
