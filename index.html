@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%88%82%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <script src="vendor/katex/katex.min.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=20260925-1">
+  <link rel="stylesheet" href="css/style.css?v=20260925-2">
 </head>
 <body>
   <div id="app">
@@ -51,6 +51,7 @@
       <p class="muted">수학 문제를 맞혀 공격하고, 움직이고, 살아남아라! · 자유 조준 · 증강 · 2~5인 · 턴제/난전</p>
       <a class="version-link" href="v2/">🕰️ 이전 버전 (v2)</a> <a class="version-link" href="classic/">· 클래식</a>
       <label class="check"><input type="checkbox" id="optTimer" checked> 제한 시간 사용 (기본 45초 / 심화 90초)</label>
+      <div class="hp-row" id="hpRow" role="group" aria-label="시작 체력"></div>
 
       <section class="mode">
         <h2 class="mode-title">🖥️ 한 기기로 하기</h2>
@@ -89,7 +90,7 @@
   <div class="overlay hidden" id="modal"><div class="card" id="modalCard"></div></div>
 
   <script src="vendor/mqtt/mqtt.min.js"></script>
-  <script src="js/problems.js?v=20260925-1"></script>
-  <script src="js/game.js?v=20260925-1"></script>
+  <script src="js/problems.js?v=20260925-2"></script>
+  <script src="js/game.js?v=20260925-2"></script>
 </body>
 </html>

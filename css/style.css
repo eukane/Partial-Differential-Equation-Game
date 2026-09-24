@@ -414,6 +414,10 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 @media (max-width: 560px) { .augments { grid-template-columns: 1fr; } .augment { flex-direction: row; text-align: left; } .aug-icon { font-size: 2rem; } }
 
 .count-row { display: flex; align-items: center; gap: 6px; }
+.hp-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.hp-row span { color: var(--muted); font-size: .85rem; margin-right: 4px; }
+.hp-btn { min-width: 58px; font-weight: 800; padding: 7px 0; font-variant-numeric: tabular-nums; }
+.hp-btn.sel { border-color: var(--accent); background: #3a3217; }
 .count-row span { color: var(--muted); font-size: .85rem; margin-right: 4px; }
 .count-btn { flex: 1; font-weight: 800; padding: 8px 0; }
 .count-btn.sel { border-color: var(--accent); background: #3a3217; }

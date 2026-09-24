@@ -26,7 +26,8 @@
   const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
   const TILT = 52;          // 플레이어 시점 카메라 기울기
   const TOP_TILT = 14;      // 전체 보기 기울기
-  const MAX_HP = 150;
+  const HP_CHOICES = [100, 150, 200, 300];   // 시작 전에 고르는 체력
+  const DEFAULT_HP = 150;
   const POWER_MULT = 1.75;  // 강화탄 배율
   const BUMP_DMG = 10;
 
@@ -98,6 +99,7 @@
     online: null,     // 온라인 방 상태 (없으면 한 기기 모드)
     gseed: 1,         // 게임 seed (증강 후보를 정한다)
     coins: [],        // 동전 칸 좌표
+    maxHp: DEFAULT_HP, // 시작 체력 (= 최대 체력)
     mode: 'turn',     // turn: 턴제 · brawl: 난전 (온라인 전용)
     myBusy: false,    // 난전: 내 행동이 진행 중
     lockUntil: 0,     // 난전: 오답 후 쉬는 시간
@@ -184,6 +186,18 @@
       }
     };
     document.querySelectorAll('.count-btn').forEach(b => { b.onclick = () => setCount(+b.dataset.n); });
+    const hpPicker = (box, value, onPick) => {
+      box.innerHTML = `<span>시작 체력</span>${HP_CHOICES.map(h => `<button class="hp-btn ${h === value ? 'sel' : ''}" data-hp="${h}">${h}</button>`).join('')}`;
+      box.querySelectorAll('[data-hp]').forEach(b => { b.onclick = () => onPick(+b.dataset.hp); });
+    };
+    const setHp = h => {
+      S.maxHp = h;
+      store.set('pdeb-hp', h);
+      hpPicker($('#hpRow'), h, setHp);
+      if (S.phase === 'setup') { S.players.forEach(q => { q.hp = h; }); renderPieces(); }
+    };
+    S.renderHpPicker = hpPicker;
+    setHp(HP_CHOICES.includes(store.get('pdeb-hp')) ? store.get('pdeb-hp') : DEFAULT_HP);
     $('#btnStart').onclick = startGame;
     $('#btnRules').onclick = showRules;
     $('#btnRules2').onclick = showRules;
@@ -276,7 +290,7 @@
     setBoard(n);
     const ang = Math.round(normAng(Math.atan2(3.5 - x, -(3.5 - y)) * 180 / Math.PI) / 5) * 5;
     return { id: i, name, color: p.color, emoji: p.emoji, x, y, ang, style: null,
-      hp: MAX_HP, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0 };
+      hp: S.maxHp, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0 };
   }
 
   function startGame() {
@@ -359,7 +373,7 @@
         <span class="pemoji">${p.emoji}</span>
         <div class="pinfo">
           <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
-          <div class="hp"><div class="hp-fill" style="width:${p.hp / MAX_HP * 100}%"></div></div>
+          <div class="hp"><div class="hp-fill" style="width:${p.hp / S.maxHp * 100}%"></div></div>
           ${brawl() && S.online && p.alive && p.id !== S.online.mySeat && Net.seatStatus(p.id) ? `<div class="pdoing">${esc(Net.seatStatus(p.id))}</div>` : ''}
         </div>
         <div class="pnums"><span class="hpnum">${p.alive ? p.hp : '탈락'}</span><span class="score">${p.score}점</span></div>
@@ -383,7 +397,7 @@
       node.style.setProperty('--pc', p.color);
       node.classList.toggle('current', p === cur() && ['choose', 'rotate', 'busy'].includes(S.phase));
       node.classList.toggle('dead', !p.alive);
-      node.querySelector('.mini-hp i').style.width = (p.hp / MAX_HP * 100) + '%';
+      node.querySelector('.mini-hp i').style.width = (p.hp / S.maxHp * 100) + '%';
       node.querySelector('.badges').textContent = (p.shield ? '🛡️' : '') + (p.power ? '💥' : '');
     }
   }
@@ -1101,7 +1115,7 @@
   // ------------------------------------------------------------------
   function heal(p, amt) {
     const before = p.hp;
-    p.hp = Math.min(MAX_HP, p.hp + amt);
+    p.hp = Math.min(S.maxHp, p.hp + amt);
     if (p.hp > before) floatText(p, `+${p.hp - before}`, 'heal');
     renderPlayers(); renderPieces();
     return p.hp - before;
@@ -1532,7 +1546,7 @@
   /** 게임 상태 직렬화 (presence 4KiB 안에 들어가도록 숫자 배열로) */
   function snapshot() {
     return {
-      t: S.turn, r: S.round, o: S.pos, x: S.extraActive ? 1 : 0, g: S.gseed, c: S.coins,
+      t: S.turn, r: S.round, o: S.pos, x: S.extraActive ? 1 : 0, g: S.gseed, c: S.coins, m: S.maxHp,
       p: S.players.map(p => [p.x, p.y, Math.round(p.ang * 10), p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries, p.score, STYLE_KEYS.indexOf(p.style)]),
     };
   }
@@ -1540,6 +1554,7 @@
     if (!b || !Array.isArray(b.p)) return;
     S.turn = int(b.t, 0, S.players.length - 1);
     S.round = int(b.r, 1, 9999, 1);
+    S.maxHp = int(b.m, 50, 999, S.maxHp);
     S.pos = int(b.o, 0, S.players.length - 1);
     S.extra = false;
     S.extraActive = !!b.x;
@@ -1551,7 +1566,7 @@
       const p = S.players[i];
       if (!p || !Array.isArray(a)) return;
       p.x = int(a[0], 0, N - 1); p.y = int(a[1], 0, N - 1); p.ang = int(a[2], 0, 3599) / 10;
-      p.hp = int(a[3], 0, MAX_HP); p.alive = !!a[4] && p.hp > 0; p.shield = !!a[5]; p.power = !!a[6];
+      p.hp = int(a[3], 0, S.maxHp); p.alive = !!a[4] && p.hp > 0; p.shield = !!a[5]; p.power = !!a[6];
       p.correct = int(a[7], 0, 9999); p.tries = int(a[8], 0, 9999); p.score = int(a[9], 0, 1e7);
       p.style = STYLE_KEYS[int(a[10], -1, STYLE_KEYS.length - 1, -1)] || null;
     });
@@ -1814,7 +1829,7 @@
       let code = '';
       for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
       if (!(await this.connect(code))) return;
-      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn' };
+      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn', hp: S.maxHp };
       this.publish();
       showLobby();
     },
@@ -1824,7 +1839,7 @@
       const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
       if (!seats.length) return;
       seats[0].k = this.myKey();
-      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn' };
+      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP) };
       this.queue = []; this.handled = {};
       if (S.online.phase === 'game') {
         this.enterGame();
@@ -1842,9 +1857,9 @@
       const o = S.online;
       this.room.presence({
         app: APP, room: o.code, role: 'host', uid: this.uid, nick: this.nick,
-        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, req: null,
+        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, req: null,
       }).catch(() => toast('방 정보를 보내지 못했어요', 2500));
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
     },
     startGame() {
       const o = S.online;
@@ -1941,6 +1956,7 @@
       o.mySeat = o.seats.findIndex(x => x.k === this.myKey());
       o.timer = !!h.tm;
       o.mode = h.md === 'brawl' ? 'brawl' : 'turn';
+      o.hp = int(h.mh, 50, 999, DEFAULT_HP);
       if (h.ph === 'lobby') {
         if (o.phase === 'game') { toast('방장이 방을 새로 열었어요'); }
         o.phase = 'lobby';
@@ -2033,6 +2049,7 @@
     enterGame() {
       const o = S.online;
       S.timer = o.timer;
+      S.maxHp = o.hp || DEFAULT_HP;
       S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length));
       S.mode = o.mode === 'brawl' ? 'brawl' : 'turn';
       S.myBusy = false; S.lockUntil = 0; S.localAim = null;
@@ -2083,7 +2100,7 @@
     },
     publishSaveOnly() {
       const o = S.online;
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, cur: snapshot(), at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, cur: snapshot(), at: Date.now() });
     },
     leave() {
       if (this.room) {
@@ -2137,7 +2154,8 @@
           <div class="mode-pick" role="group" aria-label="게임 모드">
             <button data-mode="turn" class="${o.mode !== 'brawl' ? 'sel' : ''}"><b>🎲 턴제</b><small>한 명씩 차례대로</small></button>
             <button data-mode="brawl" class="${o.mode === 'brawl' ? 'sel' : ''}"><b>🔥 난전</b><small>턴 없이 동시에, 맞히는 대로 행동</small></button>
-          </div>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b></p>`}
+          </div>
+          <div class="hp-row" id="lobbyHp"></div>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b> · 시작 체력 <b>${o.hp}</b></p>`}
         <ul class="seats">${seats}</ul>
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
@@ -2161,6 +2179,8 @@
     el.lobby.querySelectorAll('[data-mode]').forEach(b => {
       b.onclick = () => { o.mode = b.dataset.mode; Net.publish(); renderLobby(); };
     });
+    const lh = $('#lobbyHp');
+    if (lh) S.renderHpPicker(lh, o.hp, h => { o.hp = h; store.set('pdeb-hp', h); Net.publish(); renderLobby(); });
     $('#btnLobbyLeave').onclick = () => Net.leave();
   }
 
@@ -2173,7 +2193,7 @@
     const c = openModal(`
       <div class="rules">
         <h2>📖 게임 규칙</h2>
-        <p class="muted">8×8 체스판(5명이면 오각형 판) 위에서 2~5명이 싸우는 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
+        <p class="muted">8×8 체스판(5명이면 오각형 판) 위에서 2~5명이 싸우는 게임입니다. 마지막까지 살아남으면 승리! (시작 체력은 게임 전에 ${HP_CHOICES.join(' / ')} 중에서 골라요)</p>
         <h3>턴 진행</h3>
         <ul>
           <li>첫 차례에 <b>증강</b>을 고릅니다. 무작위 공격 스타일 ${OFFER_N}개 중 하나를 골라 게임 끝까지 씁니다.</li>
