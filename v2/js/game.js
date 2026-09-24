@@ -26,8 +26,8 @@
   const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
   const TILT = 52;          // 플레이어 시점 카메라 기울기
   const TOP_TILT = 14;      // 전체 보기 기울기
-  const MAX_HP = 150;
-  const POWER_MULT = 1.75;  // 강화탄 배율
+  const MAX_HP = 120;
+  const POWER_MULT = 1.5;   // 강화탄 배율 (한 방에 끝나지 않도록 2배 → 1.5배)
   const BUMP_DMG = 10;
 
   const MAX_PLAYERS = 5;
@@ -58,23 +58,24 @@
   const CAT_ICONS = { common: '📘', calc: '∫', prob: '🎲', geo: '📐' };
   const catInfo = k => (window.MathProblems && window.MathProblems.CATS[k]) || { name: k, sub: '' };
   /** 1라운드는 준비 라운드: 공격 불가 (선공 이점 완화) */
-  const prepRound = () => S.mode !== 'brawl' && S.round === 1;
-  const brawl = () => S.mode === 'brawl';
-  /** 턴 순서: 항상 1번 → 2번 → … 차례대로 */
-  function orderFor() {
-    return [...Array(S.players.length).keys()];
+  const prepRound = () => S.round === 1;
+  /** 라운드마다 시작 순서를 한 칸씩 돌린다: A B C → B C A → C A B */
+  function orderFor(round) {
+    const n = S.players.length;
+    const base = [...Array(n).keys()];
+    const k = (round - 1) % n;
+    return base.slice(k).concat(base.slice(0, k));
   }
-  const BRAWL_LOCK_MS = 3000;   // 난전에서 오답 후 쉬는 시간
-  const COIN_COUNT = 3;
 
   const BOX = [
-    { id: 'heal',   icon: '💚', name: '회복',     desc: 'HP +40',                          w: 4 },
-    { id: 'power',  icon: '💥', name: '강화탄',   desc: '다음 공격 피해 1.75배',            w: 4 },
-    { id: 'bolt',   icon: '⚡', name: '번개',     desc: '무작위 적 1명에게 30 피해',         w: 3 },
-    { id: 'meteor', icon: '☄️', name: '유성우',   desc: '모든 적에게 18 피해',              w: 2 },
-    { id: 'tele',   icon: '🌀', name: '순간이동', desc: '무작위 빈 칸으로 이동 + HP +15',    w: 2 },
-    { id: 'swap',   icon: '🔁', name: '위치 교환', desc: '무작위 적과 자리 바꾸고 그 적에게 15 피해', w: 2 },
-    { id: 'again',  icon: '⏩', name: '추가 행동', desc: '한 번 더 행동 + HP +10 (난전: HP +25)', w: 2 },
+    { id: 'heal',   icon: '💚', name: '회복',     desc: 'HP +25',                  w: 3 },
+    { id: 'shield', icon: '🛡️', name: '방패',     desc: '다음 피해 1회 무효',       w: 3 },
+    { id: 'power',  icon: '💥', name: '강화탄',   desc: '다음 공격 피해 1.5배',     w: 3 },
+    { id: 'bolt',   icon: '⚡', name: '번개',     desc: '무작위 적 1명에게 20 피해', w: 3 },
+    { id: 'meteor', icon: '☄️', name: '유성우',   desc: '모든 적에게 10 피해',      w: 2 },
+    { id: 'tele',   icon: '🌀', name: '순간이동', desc: '무작위 빈 칸으로 이동',     w: 2 },
+    { id: 'swap',   icon: '🔁', name: '위치 교환', desc: '무작위 적과 자리 바꾸기',  w: 2 },
+    { id: 'again',  icon: '⏩', name: '추가 행동', desc: '이번 턴에 한 번 더 행동',  w: 2 },
     { id: 'bomb',   icon: '💣', name: '꽝! 폭탄', desc: '자신이 15 피해',           w: 2, bad: true },
   ];
 
@@ -97,10 +98,6 @@
     applying: false,  // act 재생 중
     online: null,     // 온라인 방 상태 (없으면 한 기기 모드)
     gseed: 1,         // 게임 seed (증강 후보를 정한다)
-    coins: [],        // 동전 칸 좌표
-    mode: 'turn',     // turn: 턴제 · brawl: 난전 (온라인 전용)
-    myBusy: false,    // 난전: 내 행동이 진행 중
-    lockUntil: 0,     // 난전: 오답 후 쉬는 시간
     pos: 0,           // 이번 라운드 순서에서 몇 번째인지
     lastCat: {},      // 플레이어별 마지막으로 고른 과목
     pick: null,       // 판에서 칸 고르는 중
@@ -130,14 +127,7 @@
   const enemies = p => S.players.filter(q => q.alive && q !== p);
   const at = (x, y, except) => S.players.find(p => p.alive && p !== except && p.x === x && p.y === y) || null;
   const dirIdx = (dx, dy) => DIRS.findIndex(d => d[0] === dx && d[1] === dy);
-  /** 내가 조작하는 말인가 (턴제: 내 차례, 난전: 내가 살아 있음) */
-  const myTurn = () => !S.online || (S.mode === 'brawl'
-    ? !!(S.players[S.online.mySeat] && S.players[S.online.mySeat].alive)
-    : S.online.mySeat === S.turn);
-  /** 지금 행동 버튼을 누를 수 있는가 */
-  const canAct = () => (S.mode === 'brawl'
-    ? S.phase !== 'over' && myTurn() && !S.myBusy && Date.now() >= S.lockUntil
-    : S.phase === 'choose' && myTurn());
+  const myTurn = () => !S.online || S.online.mySeat === S.turn;
   const tag = p => `<span class="who" style="--pc:${p.color}">${p.emoji} ${esc(p.name)}</span>`;
 
   // ------------------------------------------------------------------
@@ -286,8 +276,7 @@
     S.timer = $('#optTimer').checked;
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     S.gseed = newSeed();
-    S.mode = 'turn';
-    initCoins();
+    el.pieces.innerHTML = '';
     el.log.innerHTML = '';
     el.setup.classList.add('hidden');
     log('🎮 게임 시작! 첫 차례에 증강(공격 스타일)을 고르세요.');
@@ -348,8 +337,7 @@
     renderGuide();
     updateCamera();
     el.roundInfo.innerHTML = S.phase === 'setup' ? ''
-      : brawl() ? `🔥 난전 · 생존 ${alive().length}명`
-      : `라운드 ${S.round}${prepRound() ? ' (준비 · 공격 불가)' : ''}<span class="order"> · 순서 ${orderFor().filter(i => S.players[i] && S.players[i].alive).map(i => S.players[i].emoji).join('→')}</span>`;
+      : `라운드 ${S.round}${prepRound() ? ' (준비 · 공격 불가)' : ''}<span class="order"> · 순서 ${orderFor(S.round).filter(i => S.players[i] && S.players[i].alive).map(i => S.players[i].emoji).join('→')}</span>`;
     renderSpectate();
   }
 
@@ -360,7 +348,6 @@
         <div class="pinfo">
           <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
           <div class="hp"><div class="hp-fill" style="width:${p.hp / MAX_HP * 100}%"></div></div>
-          ${brawl() && S.online && p.alive && p.id !== S.online.mySeat && Net.seatStatus(p.id) ? `<div class="pdoing">${esc(Net.seatStatus(p.id))}</div>` : ''}
         </div>
         <div class="pnums"><span class="hpnum">${p.alive ? p.hp : '탈락'}</span><span class="score">${p.score}점</span></div>
       </div>`).join('');
@@ -412,7 +399,7 @@
       return;
     }
 
-    const dis = canAct() ? '' : 'disabled';
+    const dis = S.phase !== 'choose' ? 'disabled' : '';
     const btn = (k, cls = '') => {
       const a = actionInfo(k, p);
       return `<button class="act ${cls}" data-a="${k}" ${dis}><span class="ai">${a.icon}</span><span><b>${a.name}</b><br><small>${a.sub}</small></span></button>`;
@@ -432,8 +419,7 @@
           : btn('attack', 'wide')) : `<button class="act wide free" data-a="augment" ${dis}><span class="ai">✨</span><span><b>증강 고르기</b><br><small>공격 스타일을 먼저 고르세요</small></span></button>`}
         ${btn('move')}${btn('box')}
       </div>
-      ${brawl() ? `<p class="brawl-state">${S.myBusy ? '⏳ 내 행동을 처리하는 중…' : Date.now() < S.lockUntil ? `😵 오답! ${Math.ceil((S.lockUntil - Date.now()) / 1000)}초 뒤 다시 도전` : '🔥 난전: 문제를 맞히는 대로 바로 행동!'}</p>` : ''}
-      <p class="hint">공격·이동·랜덤박스는 <b>문제를 맞혀야</b> 실행됩니다. ${brawl() ? '오답이면 3초 동안 쉬어요.' : '오답이면 그대로 턴 종료!'}<br>
+      <p class="hint">공격·이동·랜덤박스는 <b>문제를 맞혀야</b> 실행됩니다. 오답이면 그대로 턴 종료!<br>
       판 위 점선·네모는 지금 공격하면 닿는 곳, 빨간 원은 맞는 적이에요.</p>`;
     el.turnPanel.querySelectorAll('[data-a]').forEach(b => { b.onclick = () => onAction(b.dataset.a); });
     el.turnPanel.querySelectorAll('[data-r]').forEach(b => { b.onclick = () => setAim(p.ang + Number(b.dataset.r)); });
@@ -444,7 +430,7 @@
     const box = el.spectate;
     if (!box) return;
     const p = cur();
-    const L = S.online && !brawl() && p && !myTurn() && ['choose', 'busy'].includes(S.phase) && !S.applying ? Net.seatLive(S.turn) : null;
+    const L = S.online && p && !myTurn() && ['choose', 'busy'].includes(S.phase) && !S.applying ? Net.seatLive(S.turn) : null;
     if (!L || !['level', 'quiz', 'result', 'cell'].includes(L.st)) {
       box.hidden = true;
       clearInterval(S.specTimer);
@@ -641,7 +627,7 @@
     for (let guard = 0; guard < 4 * n; guard++) {
       pos++;
       if (pos >= n) { pos = 0; round++; }
-      id = orderFor()[pos];
+      id = orderFor(round)[pos];
       // 죽은 사람은 건너뛰고, 라운드가 바뀌며 같은 사람이 연달아 두 번 하지 않게 한다
       if (S.players[id].alive && (id !== S.turn || aliveCount < 2)) break;
     }
@@ -653,14 +639,6 @@
 
   function startOnlineTurn() {
     S.phase = 'choose';
-    if (brawl()) {
-      const me = S.online && S.players[S.online.mySeat];
-      S.turn = me ? S.online.mySeat : Math.max(0, S.players.findIndex(q => q.alive));
-      renderAll();
-      toast('🔥 난전 시작! 문제를 맞히는 대로 바로 행동하세요');
-      maybeAugment();
-      return;
-    }
     renderAll();
     const p = cur();
     toast(myTurn() ? '🔔 내 차례!' : `${p.emoji} ${p.name} 차례`);
@@ -713,12 +691,6 @@
     king:     { icon: '👑', name: '킹', desc: '주변 8칸을 강타', dmg: { easy: 35, hard: 45 } },
     mortar:   { icon: '💣', name: '박격포', desc: '5칸 안의 칸을 골라 3×3 폭발 (가장자리 60%). 범위 안이면 자신도 맞음', target: true, dmg: { easy: 25, hard: 35 } },
     scatter:  { icon: '🎲', name: '난사', desc: '무작위 좌표로 발사, 벽에 3번 튕기며 관통. 운에 맡기는 한 방', dmg: { easy: 30, hard: 40 } },
-    queen:    { icon: '👸', name: '퀸', desc: '가로·세로·대각선 8방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 13, hard: 18 } },
-    laser:    { icon: '🔦', name: '레이저', desc: '조준 방향 일직선을 끝까지 관통 (반사 없음)', aim: true, dmg: { easy: 22, hard: 30 } },
-    spear:    { icon: '🔱', name: '창', desc: '조준 방향 2칸 거리까지 관통하는 강한 찌르기', aim: true, dmg: { easy: 38, hard: 50 } },
-    vampire:  { icon: '🧛', name: '흡혈', desc: '조준 방향 직선, 처음 맞는 적. 준 피해의 절반만큼 회복', aim: true, dmg: { easy: 24, hard: 32 } },
-    chain:    { icon: '🌩️', name: '체인 번개', desc: '4칸 안의 가장 가까운 적부터 3칸 안의 다음 적으로 튕기며 최대 3명', dmg: { easy: 18, hard: 25 } },
-    whirl:    { icon: '🌪️', name: '회오리', desc: '주변 2칸(5×5) 안의 모든 적을 휩쓸기', dmg: { easy: 18, hard: 25 } },
   };
   const STYLE_KEYS = Object.keys(STYLES);
   const OFFER_N = 3;
@@ -749,7 +721,7 @@
 
   function maybeAugment() {
     const p = cur();
-    if (!p || !p.alive || p.style || !myTurn() || S.phase !== 'choose' || S.augmentOpen || (brawl() && S.myBusy)) return;
+    if (!p || !p.alive || p.style || !myTurn() || S.phase !== 'choose' || S.augmentOpen) return;
     S.augmentOpen = true;
     Net.status('✨ 증강 고르는 중…');
     const offers = offersFor(p);
@@ -769,7 +741,7 @@
         }).join('')}
       </div>`, 'augment-card');
     c.querySelectorAll('[data-s]').forEach(b => {
-      b.onclick = () => { closeModal(); Net.status(null); if (brawl()) S.myBusy = true; submit({ key: 'pick', style: b.dataset.s }); };
+      b.onclick = () => { closeModal(); Net.status(null); submit({ key: 'pick', style: b.dataset.s }); };
     });
     S.keyHandler = e => {
       const i = '123'.indexOf(e.key);
@@ -786,7 +758,6 @@
   function setAim(a) {
     if (!myTurn() || S.phase !== 'choose') return;
     cur().ang = Math.round(normAng(a) * 10) / 10;
-    S.localAim = cur().ang;
     Net.liveAim(cur().ang);
     renderAll();
   }
@@ -842,16 +813,15 @@
 
   // ---------------- 행동 선택 ----------------
   async function onAction(key) {
-    if (!canAct()) return;
+    if (S.phase !== 'choose' || !myTurn()) return;
     const p = cur();
     if (key === 'augment') { maybeAugment(); return; }
     if (key === 'attack' && (prepRound() || S.extraActive)) return;
 
-    if (brawl()) S.myBusy = true;
     const lv = await pickLevel(key);
-    if (!lv) { S.myBusy = false; renderTurn(); return; }
+    if (!lv) return;
     const { cat, level } = lv;
-    if (!brawl()) S.phase = 'busy';
+    S.phase = 'busy';
     renderAll();
 
     const info = actionInfo(key, p);
@@ -871,7 +841,6 @@
     }
     Net.status(null);
     Net.live(null);
-    if (brawl() && !q.ok) { S.lockUntil = Date.now() + BRAWL_LOCK_MS; setTimeout(renderTurn, BRAWL_LOCK_MS + 50); }
     submit(act);
   }
 
@@ -888,7 +857,6 @@
     rng = mulberry32(act.seed | 0);
     try {
       if (act.key === 'restart') { restartOnline(act.seed); return; }
-      if (brawl()) { await applyBrawl(act); return; }
       const p = cur();
       if (act.key === 'pick') {
         const s = STYLES[act.style];
@@ -930,36 +898,6 @@
       rng = Math.random;
       S.applying = false;
       Net.afterApply();
-    }
-  }
-
-  /** 난전: 누구의 행동이든 도착한 순서대로 바로 실행 (차례 없음) */
-  async function applyBrawl(act) {
-    const p = S.players[act.actor];
-    const mine = S.online && act.actor === S.online.mySeat;
-    try {
-      if (!p || !p.alive) return;
-      if (act.key === 'pick') {
-        const s = STYLES[act.style];
-        if (s && !p.style) {
-          p.style = act.style;
-          log(`${tag(p)} ✨ 증강 선택: ${s.icon} ${s.name}`);
-        }
-        return;
-      }
-      if (act.ang != null && !mine) p.ang = act.ang;
-      p.tries++;
-      if (act.ok) { p.correct++; p.score += act.pts || 0; }
-      log(`${tag(p)} ${esc(catInfo(act.cat).name)} ${LEVELS[act.level].label} 문제(${esc(act.topic || '')}) ${act.ok ? `✅ 정답 ${act.sec}초 · +${act.pts}점${act.fast ? ' ⚡빠른 정답' : ''}` : act.to ? '⏰ 시간 초과' : '❌ 오답'}`);
-      if (!act.ok) return;
-      if (mine) { const a0 = p.ang; p.ang = act.ang; await perform(p, act); if (p.ang === act.ang) p.ang = a0; }
-      else await perform(p, act);
-      checkWin();
-    } finally {
-      if (mine) S.myBusy = false;
-      if (S.phase !== 'over') S.phase = 'choose';
-      renderAll();
-      maybeAugment();
     }
   }
 
@@ -1099,25 +1037,15 @@
   // ------------------------------------------------------------------
   //  피해 처리
   // ------------------------------------------------------------------
-  function heal(p, amt) {
-    const before = p.hp;
-    p.hp = Math.min(MAX_HP, p.hp + amt);
-    if (p.hp > before) floatText(p, `+${p.hp - before}`, 'heal');
-    renderPlayers(); renderPieces();
-    return p.hp - before;
-  }
-
-  /** 피해를 주고 실제로 깎인 양을 돌려준다 */
   function damage(t, amt, src, why) {
-    if (!t.alive) return 0;
+    if (!t.alive) return;
     if (t.shield) {
       t.shield = false;
       floatText(t, '🛡️ 방어!', 'info');
       log(`${tag(t)} 🛡️ 방패로 ${why}을(를) 막았다!`);
       renderPlayers(); renderPieces();
-      return 0;
+      return;
     }
-    const before = t.hp;
     t.hp = Math.max(0, t.hp - amt);
     floatText(t, `-${amt}`, 'dmg');
     hitFx(t);
@@ -1129,7 +1057,6 @@
       toast(`💀 ${t.emoji} ${t.name} 탈락!`, 2200);
     }
     renderPlayers(); renderPieces();
-    return before - t.hp;
   }
 
   // ------------------------------------------------------------------
@@ -1216,35 +1143,6 @@
         for (let i = cells.length - 1; i >= 0; i--) if (cells[i][0] === p.x && cells[i][1] === p.y) cells.splice(i, 1);
         break;
       case 'mortar': if (target) ring(target[0], target[1], 0.6); break;
-      case 'queen': [0, 45, 90, 135, 180, 225, 270, 315].forEach(a => ray(a)); break;
-      case 'laser': ray(p.ang, { pierce: true }); break;
-      case 'spear': ray(p.ang, { maxLen: 2.5, pierce: true }); break;
-      case 'vampire': ray(p.ang); break;
-      case 'whirl':
-        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-          if ((dx || dy) && inB(p.x + dx, p.y + dy)) cells.push([p.x + dx, p.y + dy, 1]);
-        }
-        break;
-      case 'chain': {
-        // 가까운 적부터 차례로 튕긴다 (같은 거리는 번호 순 → 모든 화면에서 같은 결과)
-        const hits = [], pts = [[ox, oy]];
-        let from = p, reach = 4, travelled = 0;
-        for (let k = 0; k < 3; k++) {
-          const next = S.players
-            .filter(q => q.alive && q !== p && !hits.some(h => h.q === q))
-            .map(q => ({ q, d: Math.hypot(q.x - from.x, q.y - from.y) }))
-            .filter(o => o.d <= reach + 1e-9)
-            .sort((m, n) => m.d - n.d || m.q.id - n.q.id)[0];
-          if (!next) break;
-          travelled += next.d;
-          const at2 = [next.q.x + 0.5, next.q.y + 0.5];
-          pts.push(at2);
-          hits.push({ q: next.q, d: travelled, bounces: 0, at: at2 });
-          from = next.q; reach = 3;
-        }
-        if (hits.length) rays.push({ pts, hits });
-        break;
-      }
       case 'scatter': if (target) ray(angTo(p, target[0], target[1]), { bounces: 3, pierce: true }); break;
     }
     return { rays, cells };
@@ -1308,13 +1206,12 @@
       fn: () => {
         hitCount++;
         burst(h.at[0], h.at[1], '#ff5d6c');
-        const dealt = damage(h.q, dmg, p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회)` : ''}`);
-        if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 2));
+        damage(h.q, dmg, p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회)` : ''}`);
       },
     })))));
     if (plan.cells.length) {
       if (p.style === 'mortar') await animatePath([[p.x + 0.5, p.y + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], '#ff9f43', 10);
-      for (const [x, y] of plan.cells) burst(x + 0.5, y + 0.5, p.style === 'mortar' ? '#ff9f43' : p.style === 'whirl' ? '#9be7ff' : p.color);
+      for (const [x, y] of plan.cells) burst(x + 0.5, y + 0.5, p.style === 'mortar' ? '#ff9f43' : p.color);
       await sleep(250);
       for (const [x, y, w] of plan.cells) {
         const q = at(x, y);
@@ -1328,54 +1225,6 @@
   // ------------------------------------------------------------------
   //  이동: 범위 안의 빈 칸으로 (킹처럼 8방향, 거리 = 가로·세로 중 큰 값)
   // ------------------------------------------------------------------
-  /** 게임 시작 때 동전 칸을 정한다 (게임 seed 로 정해져 모든 화면이 같다) */
-  function initCoins() {
-    const r = mulberry32((S.gseed ^ 0x5eed) | 0);
-    const free = [];
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (inB(x, y) && !at(x, y) && S.players.every(q => Math.max(Math.abs(q.x - x), Math.abs(q.y - y)) >= 2)) free.push([x, y]);
-    }
-    S.coins = [];
-    while (S.coins.length < COIN_COUNT && free.length) S.coins.push(free.splice(Math.floor(r() * free.length), 1)[0]);
-    renderCoins();
-  }
-  function renderCoins() {
-    el.cells.querySelectorAll('.coin').forEach(n => n.classList.remove('coin'));
-    for (const [x, y] of S.coins || []) {
-      const n = el.cells.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
-      if (n) n.classList.add('coin');
-    }
-  }
-  /** 동전 칸을 밟으면 동전 던지기: 앞면이면 모두의 위치를 무작위로 섞는다 */
-  async function flipCoin(p, idx) {
-    const heads = rng() < 0.5;
-    toast(`🪙 ${p.emoji} 동전 던지기…`, 1200);
-    await sleep(900);
-    if (heads) {
-      const live = alive();
-      const spots = live.map(q => [q.x, q.y]);
-      for (let i = spots.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [spots[i], spots[j]] = [spots[j], spots[i]];
-      }
-      live.forEach((q, i) => { burst(q.x + 0.5, q.y + 0.5, '#ffd84d'); [q.x, q.y] = spots[i]; });
-      renderPieces();
-      toast('🪙 앞면! 모두의 위치가 뒤섞였어요', 2200);
-      log(`${tag(p)} 🪙 동전 앞면 → 모두의 위치를 섞었다!`);
-      await sleep(400);
-    } else {
-      toast('🪙 뒷면… 아무 일도 없었어요', 1600);
-      log(`${tag(p)} 🪙 동전 뒷면`);
-    }
-    // 쓴 동전 칸은 다른 빈 칸으로 옮겨 간다
-    const free = [];
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (inB(x, y) && !at(x, y) && !S.coins.some(c => c[0] === x && c[1] === y)) free.push([x, y]);
-    }
-    if (free.length) S.coins[idx] = free[Math.floor(rng() * free.length)];
-    renderCoins();
-  }
-
   async function doMove(p, dest, range) {
     if (!dest || at(dest[0], dest[1]) || Math.max(Math.abs(dest[0] - p.x), Math.abs(dest[1] - p.y)) > range) {
       log(`${tag(p)} 👣 이동할 수 없는 칸이라 제자리`);
@@ -1389,8 +1238,6 @@
     await sleep(450);
     burst(p.x + 0.5, p.y + 0.5, p.color);
     log(`${tag(p)} 👣 ${coord(p.x, p.y)} 로 이동`);
-    const ci = (S.coins || []).findIndex(c => c[0] === p.x && c[1] === p.y);
-    if (ci >= 0) await flipCoin(p, ci);
     renderAll();
   }
 
@@ -1407,12 +1254,6 @@
   async function doBox(p, level, fast) {
     const pool = BOX.filter(b => !((level === 'hard' || fast) && b.bad) && !(prepRound() && ['bolt', 'meteor'].includes(b.id)));
     const res = weighted(pool);
-    if (brawl()) {
-      toast(`${p.emoji} 🎁 ${res.icon} ${res.name}`, 2000);
-      log(`${tag(p)} 🎁 랜덤박스: ${res.icon} ${res.name}`);
-      await applyBox(p, res);
-      return;
-    }
     const c = openModal(`
       <h2>🎁 랜덤박스</h2>
       <div class="roulette"><div class="slot">❔</div><div class="slot-name"></div></div>
@@ -1447,19 +1288,24 @@
     switch (b.id) {
       case 'heal': {
         const before = p.hp;
-        heal(p, 40);
+        p.hp = Math.min(MAX_HP, p.hp + 25);
+        floatText(p, `+${p.hp - before}`, 'heal');
         break;
       }
+      case 'shield':
+        p.shield = true;
+        floatText(p, '🛡️', 'info');
+        break;
       case 'power':
         p.power = true;
-        floatText(p, `💥 x${POWER_MULT}`, 'info');
+        floatText(p, '💥 x2', 'info');
         break;
       case 'bolt': {
         const t = foes[rand(foes.length)];
         if (t) {
           await animatePath([[t.x + 0.5, -1.5], [t.x + 0.5, t.y + 0.5]], '#ffe14d', 22);
           burst(t.x + 0.5, t.y + 0.5, '#ffe14d');
-          damage(t, 30, p, '번개');
+          damage(t, 20, p, '번개');
         }
         break;
       }
@@ -1467,7 +1313,7 @@
         for (const t of foes) {
           await animatePath([[t.x - 1.5, t.y - 2.5], [t.x + 0.5, t.y + 0.5]], '#ff9f43', 18);
           burst(t.x + 0.5, t.y + 0.5, '#ff9f43');
-          damage(t, 18, p, '유성우');
+          damage(t, 10, p, '유성우');
         }
         break;
       case 'tele': {
@@ -1480,7 +1326,6 @@
         await sleep(250);
         burst(x + 0.5, y + 0.5, '#b18cff');
         log(`${tag(p)} 🌀 ${coord(x, y)} 로 순간이동`);
-        heal(p, 15);
         break;
       }
       case 'swap': {
@@ -1490,15 +1335,11 @@
           burst(p.x + 0.5, p.y + 0.5, '#b18cff');
           burst(t.x + 0.5, t.y + 0.5, '#b18cff');
           log(`${tag(p)} 🔁 ${tag(t)} 와(과) 위치 교환`);
-          renderPieces();
-          await sleep(250);
-          damage(t, 15, p, '위치 교환');
         }
         break;
       }
       case 'again':
-        if (brawl()) heal(p, 25);
-        else { S.extra = true; heal(p, 10); }
+        S.extra = true;
         break;
       case 'bomb':
         burst(p.x + 0.5, p.y + 0.5, '#ff5d6c');
@@ -1513,11 +1354,10 @@
   // ------------------------------------------------------------------
   // 공개된 게임 페이지 주소. 초대 링크 = 이 주소 + '#방코드'
   const INVITE_BASE = 'https://claude.ai/artifact/2E2sjbN9FEvtqU8FMwpNie';
-  const APP = 'pdeb3';
+  const APP = 'pdeb2';
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const HOST_SAVE = 'pdeb3-host';
+  const HOST_SAVE = 'pdeb2-host';
   const ACT_KEYS = ['attack', 'move', 'box', 'pick', 'restart'];
-  const ACT_WINDOW = 5;   // 방장이 함께 보내는 최근 행동 수
 
   const cleanText = (v, max) => String(v == null ? '' : v)
     .replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '')
@@ -1532,7 +1372,7 @@
   /** 게임 상태 직렬화 (presence 4KiB 안에 들어가도록 숫자 배열로) */
   function snapshot() {
     return {
-      t: S.turn, r: S.round, o: S.pos, x: S.extraActive ? 1 : 0, g: S.gseed, c: S.coins,
+      t: S.turn, r: S.round, o: S.pos, x: S.extraActive ? 1 : 0, g: S.gseed,
       p: S.players.map(p => [p.x, p.y, Math.round(p.ang * 10), p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries, p.score, STYLE_KEYS.indexOf(p.style)]),
     };
   }
@@ -1544,9 +1384,6 @@
     S.extra = false;
     S.extraActive = !!b.x;
     S.gseed = int(b.g, 0, 2 ** 31, 1);
-    S.coins = (Array.isArray(b.c) ? b.c : []).slice(0, COIN_COUNT)
-      .map(c => [int(c && c[0], 0, N - 1), int(c && c[1], 0, N - 1)]).filter(c => inB(c[0], c[1]));
-    renderCoins();
     b.p.forEach((a, i) => {
       const p = S.players[i];
       if (!p || !Array.isArray(a)) return;
@@ -1559,7 +1396,7 @@
   /** 다른 사람이 보낸 act 는 믿지 않고 형식을 맞춘다 */
   function cleanAct(a) {
     if (!a || !ACT_KEYS.includes(a.key)) return null;
-    const act = { key: a.key, seq: int(a.seq, 0, 1e9), seed: int(a.seed, 0, 2 ** 31), actor: int(a.actor, 0, MAX_PLAYERS - 1), n: int(a.n, 0, 2e9) };
+    const act = { key: a.key, seq: int(a.seq, 0, 1e9), seed: int(a.seed, 0, 2 ** 31) };
     const cell = c => (Array.isArray(c) ? [int(c[0], 0, N - 1), int(c[1], 0, N - 1)] : null);
     if (a.key === 'pick') act.style = STYLE_KEYS.includes(a.style) ? a.style : null;
     if (['attack', 'move', 'box'].includes(a.key)) {
@@ -1580,10 +1417,8 @@
 
   function restartOnline(seed) {
     S.gseed = seed | 0;
-    S.myBusy = false; S.lockUntil = 0;
     const names = S.players.map(p => p.name);
     S.players = names.map((nm, i) => makePlayer(i, nm, names.length));
-    initCoins();
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     closeModal();
     el.pieces.innerHTML = '';
@@ -1602,7 +1437,7 @@
     { url: 'wss://broker.hivemq.com:8884/mqtt' },
   ];
   function connectRelay(code, uid) {
-    const base = `pdeb3/${code}/p/`;
+    const base = `pdeb2/${code}/p/`;
     const myTopic = base + uid;
     return new Promise((resolve, reject) => {
       let i = 0;
@@ -1793,7 +1628,7 @@
     },
     /** 상대 차례에 조준이 바뀌면 내 화면에도 바로 반영 */
     followAim() {
-      if (!S.online || brawl() || myTurn() || S.applying || S.phase !== 'choose') return;
+      if (!S.online || myTurn() || S.applying || S.phase !== 'choose') return;
       const a = this.seatAim(S.turn);
       const p = cur();
       if (a == null || !p || Math.abs(p.ang - a) < 0.05) return;
@@ -1814,7 +1649,7 @@
       let code = '';
       for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
       if (!(await this.connect(code))) return;
-      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn' };
+      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked };
       this.publish();
       showLobby();
     },
@@ -1824,12 +1659,11 @@
       const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
       if (!seats.length) return;
       seats[0].k = this.myKey();
-      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn' };
-      this.queue = []; this.handled = {};
+      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer };
       if (S.online.phase === 'game') {
         this.enterGame();
         loadSnapshot(h.cur);
-        S.online.base = snapshot(); S.online.acts = []; S.online.hist = [];
+        S.online.base = snapshot();
         this.publish();
         startOnlineTurn();
         log('↩ 방을 다시 열었어요.');
@@ -1842,19 +1676,17 @@
       const o = S.online;
       this.room.presence({
         app: APP, room: o.code, role: 'host', uid: this.uid, nick: this.nick,
-        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, req: null,
+        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, act: o.act, tm: o.timer ? 1 : 0, req: null,
       }).catch(() => toast('방 정보를 보내지 못했어요', 2500));
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
     },
     startGame() {
       const o = S.online;
       if (!o || !o.host || o.seats.length < 2) return;
       o.phase = 'game';
-      this.queue = []; this.handled = {};
       this.enterGame();
       S.gseed = newSeed();
-      initCoins();
-      o.seq = 0; o.act = null; o.base = snapshot(); o.acts = []; o.hist = [];
+      o.seq = 0; o.act = null; o.base = snapshot();
       this.publish();
       log('🎮 게임 시작! 문제를 맞혀 행동하세요.');
       startOnlineTurn();
@@ -1862,15 +1694,8 @@
     accept(a) {
       const o = S.online;
       const act = cleanAct({ ...a, seq: o.seq + 1, seed: newSeed() });
-      if (brawl() && act && act.key !== 'restart' && !(S.players[act.actor] && S.players[act.actor].alive)) return;
       if (!act) return;
-      // 최근 행동 몇 개를 함께 보내, 늦게 받은 화면도 빠짐없이 차례로 재생하게 한다.
-      // base 는 목록 첫 행동 직전의 상태.
-      o.hist = o.hist || [];
-      o.hist.push({ act, before: snapshot() });
-      if (o.hist.length > ACT_WINDOW) o.hist.shift();
-      o.base = o.hist[0].before;
-      o.acts = o.hist.map(h => h.act);
+      o.base = snapshot();
       o.act = act;
       o.seq = act.seq;
       this.publish();
@@ -1878,7 +1703,6 @@
     },
     hostScan() {
       const o = S.online;
-      if (o && o.host && o.phase === 'game' && brawl()) { this.brawlScan(); return; }
       if (!o || !o.host || o.phase !== 'game' || S.applying || !['choose', 'rotate', 'over'].includes(S.phase)) return;
       for (const p of this.peersInRoom()) {
         const r = p.presence.req;
@@ -1890,34 +1714,13 @@
       }
     },
 
-    /** 난전: 누구의 요청이든 받은 순서대로 줄 세워 하나씩 처리한다 */
-    brawlScan() {
-      const o = S.online;
-      this.queue = this.queue || [];
-      this.handled = this.handled || {};
-      for (const p of this.peersInRoom()) {
-        const r = p.presence.req;
-        const seat = o.seats.findIndex(x => x.k === this.keyOf(p));
-        if (!r || seat < 0 || r.key === 'restart' || !r.n) continue;
-        const done = this.handled[seat] || (this.handled[seat] = new Set());
-        if (done.has(r.n)) continue;
-        done.add(r.n);
-        this.queue.push({ ...r, actor: seat });
-      }
-      this.pump();
-    },
-    pump() {
-      if (S.applying || !this.queue || !this.queue.length) return;
-      this.accept(this.queue.shift());
-    },
-
     // ---------- 참가자 ----------
     async join() {
       const code = cleanText($('#joinCode').value, 4).toUpperCase();
       if (!/^[A-Z0-9]{4}$/.test(code)) { $('#joinCode').focus(); toast('방 코드 4자리를 입력하세요'); return; }
       if (!this.readNick()) return;
       if (!(await this.connect(code))) return;
-      S.online = { code, host: false, seats: [], mySeat: -1, phase: 'joining', seq: -1, pending: null, timer: true, mode: 'turn' };
+      S.online = { code, host: false, seats: [], mySeat: -1, phase: 'joining', seq: -1, pending: null, timer: true };
       this.room.presence({ app: APP, room: code, role: 'guest', uid: this.uid, nick: this.nick, join: 1, req: null, doing: null })
         .catch(() => toast('방에 신호를 보내지 못했어요', 2500));
       showLobby();
@@ -1940,7 +1743,6 @@
       o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, MAX_PLAYERS).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어' }));
       o.mySeat = o.seats.findIndex(x => x.k === this.myKey());
       o.timer = !!h.tm;
-      o.mode = h.md === 'brawl' ? 'brawl' : 'turn';
       if (h.ph === 'lobby') {
         if (o.phase === 'game') { toast('방장이 방을 새로 열었어요'); }
         o.phase = 'lobby';
@@ -1954,40 +1756,22 @@
         o.seq = -1;
       }
       const seq = int(h.seq, 0, 1e9);
-      if (seq > o.seq) {
-        o.pending = { seq, base: h.base, acts: Array.isArray(h.acts) ? h.acts.slice(0, ACT_WINDOW) : (h.act ? [h.act] : []) };
-        this.processPending();
-      } else renderAll();
+      if (seq > o.seq) { o.pending = { seq, base: h.base, act: h.act }; this.processPending(); }
+      else renderAll();
     },
     processPending() {
       const o = S.online;
       if (!o || o.host || !o.pending || S.applying) return;
       const h = o.pending;
-      if (o.seq >= h.seq) { o.pending = null; return; }
-      const acts = h.acts.map(cleanAct).filter(Boolean).sort((m, n) => m.seq - n.seq);
-      let next = acts.find(a => a.seq === o.seq + 1);
-      if (!next) {
-        // 따라잡을 수 없을 만큼 벌어졌으면 목록 첫 행동 직전 상태부터 다시 재생
-        loadSnapshot(h.base);
-        o.seq = acts.length ? acts[0].seq - 1 : h.seq;
-        this.brawlView();
-        if (!acts.length) { o.pending = null; startOnlineTurn(); return; }
-        next = acts[0];
-      }
-      o.seq = next.seq;
-      applyAct(next);   // 끝나면 afterApply → 다음 행동
-    },
-    /** 난전에서는 화면의 주인공이 항상 나 (내 조준은 내 화면 값 유지) */
-    brawlView() {
-      const o = S.online;
-      if (!brawl() || !o) return;
-      const me = S.players[o.mySeat];
-      S.turn = me ? o.mySeat : Math.max(0, S.players.findIndex(q => q.alive));
-      if (me && S.localAim != null) me.ang = S.localAim;
+      o.pending = null;
+      loadSnapshot(h.base);
+      o.seq = h.seq;
+      const act = cleanAct(h.act);
+      if (!act || h.seq === 0) { startOnlineTurn(); return; }
+      applyAct(act);
     },
     submit(a) {
       const o = S.online;
-      if (brawl()) { this.brawlSubmit(a); return; }
       if (o.host) { this.accept(a); return; }
       const req = { ...a, seq: o.seq + 1, n: Date.now() % 1e9 };
       S.phase = 'busy';
@@ -2005,37 +1789,11 @@
       setTimeout(retry, 5000);
     },
 
-    brawlSubmit(a) {
-      const o = S.online;
-      const n = 1 + Math.floor(Math.random() * 1e9);
-      S.myBusy = true;
-      renderTurn();
-      if (o.host) {
-        this.queue = this.queue || [];
-        this.queue.push({ ...a, actor: o.mySeat, n });
-        this.pump();
-        return;
-      }
-      const req = { ...a, actor: o.mySeat, n };
-      this.room.presence({ req }).catch(() => {});
-      // 방장이 못 받았으면 같은 요청을 다시 보낸다 (방장은 같은 번호를 한 번만 처리)
-      let tries = 0;
-      const retry = () => {
-        if (!S.online || !S.myBusy) return;
-        if (++tries > 3) { S.myBusy = false; renderTurn(); toast('방장에게 전달되지 않았어요. 다시 해 주세요.', 3000); return; }
-        this.room.presence({ req: { ...req, r: tries } }).catch(() => {});
-        setTimeout(retry, 5000);
-      };
-      setTimeout(retry, 6000);
-    },
-
     // ---------- 공통 ----------
     enterGame() {
       const o = S.online;
       S.timer = o.timer;
       S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length));
-      S.mode = o.mode === 'brawl' ? 'brawl' : 'turn';
-      S.myBusy = false; S.lockUntil = 0; S.localAim = null;
       S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
       el.pieces.innerHTML = '';
       el.log.innerHTML = '';
@@ -2078,12 +1836,12 @@
     afterApply() {
       const o = S.online;
       if (!o) return;
-      if (o.host) { this.publishSaveOnly(); this.hostScan(); if (brawl()) this.pump(); }
+      if (o.host) { this.publishSaveOnly(); this.hostScan(); }
       else this.processPending();
     },
     publishSaveOnly() {
       const o = S.online;
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, cur: snapshot(), at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, cur: snapshot(), at: Date.now() });
     },
     leave() {
       if (this.room) {
@@ -2133,11 +1891,6 @@
         ${o.host ? `
           <label class="field-label" for="inviteLink">초대 링크 (친구에게 보내면 코드가 자동으로 입력돼요)</label>
           <div class="copy-row"><input id="inviteLink" readonly value="${esc(link)}"><button id="btnCopy">복사</button></div>` : ''}
-        ${o.host ? `
-          <div class="mode-pick" role="group" aria-label="게임 모드">
-            <button data-mode="turn" class="${o.mode !== 'brawl' ? 'sel' : ''}"><b>🎲 턴제</b><small>한 명씩 차례대로</small></button>
-            <button data-mode="brawl" class="${o.mode === 'brawl' ? 'sel' : ''}"><b>🔥 난전</b><small>턴 없이 동시에, 맞히는 대로 행동</small></button>
-          </div>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b></p>`}
         <ul class="seats">${seats}</ul>
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
@@ -2158,9 +1911,6 @@
     }
     const begin = $('#btnBegin');
     if (begin) begin.onclick = () => Net.startGame();
-    el.lobby.querySelectorAll('[data-mode]').forEach(b => {
-      b.onclick = () => { o.mode = b.dataset.mode; Net.publish(); renderLobby(); };
-    });
     $('#btnLobbyLeave').onclick = () => Net.leave();
   }
 
@@ -2173,15 +1923,13 @@
     const c = openModal(`
       <div class="rules">
         <h2>📖 게임 규칙</h2>
-        <p class="muted">8×8 체스판(5명이면 오각형 판) 위에서 2~5명이 싸우는 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
+        <p class="muted">8×8 체스판(5명이면 오각형 판) 위에서 2~5명이 싸우는 턴제 게임입니다. 마지막까지 살아남으면 승리! (HP ${MAX_HP})</p>
         <h3>턴 진행</h3>
         <ul>
           <li>첫 차례에 <b>증강</b>을 고릅니다. 무작위 공격 스타일 ${OFFER_N}개 중 하나를 골라 게임 끝까지 씁니다.</li>
           <li><b>조준은 무료</b>입니다. 판 위의 칸을 누르면 그 칸을 조준하고, 버튼으로 5°·15°씩 미세 조정할 수 있어요.</li>
           <li>공격·이동·랜덤박스 중 하나를 고르고, <b>과목</b>(공통·미적분·확률과 통계·기하)과 <b>난이도</b>(기본·심화)를 골라 문제를 풉니다. 맞히면 실행, 틀리면 턴 종료.</li>
-          <li><b>턴제</b>: 항상 1번 → 2번 → … 순서대로 돌아가요. 1라운드는 <b>준비 라운드</b>라 공격할 수 없고(이동·랜덤박스·증강만), 추가 행동으로는 공격할 수 없어요.</li>
-          <li><b>🔥 난전</b> (온라인): 턴 없이 모두 동시에 문제를 풀고, 맞히는 대로 바로 행동해요. 오답이면 3초 동안 쉬어요. 방장이 대기실에서 모드를 골라요.</li>
-          <li><b>🪙 동전 칸</b>: 판에 동전 칸이 ${COIN_COUNT}개 있어요. 문제를 맞히고 그 칸으로 이동하면 동전을 던져, 앞면이면 살아 있는 모두의 위치가 무작위로 섞여요. 쓴 동전 칸은 다른 곳으로 옮겨 가요.</li>
+          <li><b>밸런스</b>: 1라운드는 <b>준비 라운드</b>라 공격할 수 없고(이동·랜덤박스·증강만), 라운드마다 시작 순서가 한 칸씩 돌아갑니다 (A B C → B C A → C A B). 추가 행동으로는 공격할 수 없어요.</li>
           <li><b>온라인 관전</b>: 다른 사람 차례에는 그 사람이 고르는 과목·문제·답이 내 화면에도 실시간으로 보여요.</li>
           <li><b>점수</b>: 정답마다 기본 100점 / 심화 200점 + 속도 보너스(최대 100점). <b>⚡ 빠른 정답</b>(제한 시간 1/3 안)이면 공격 피해 +10, 이동 범위 +1칸, 랜덤박스 꽝 없음.</li>
         </ul>
@@ -2190,7 +1938,7 @@
           <tr><th>행동</th><th>기본</th><th>심화</th></tr>
           <tr><td>⚔️ 공격 — 고른 증강 스타일로 공격</td><td colspan="2">스타일별 (아래 표)</td></tr>
           <tr><td>👣 이동 — 킹처럼 가로·세로·대각선 어느 방향이든, 표시된 빈 칸을 눌러 이동</td><td>${MOVE_RANGE.easy}칸 이내</td><td>${MOVE_RANGE.hard}칸 이내</td></tr>
-          <tr><td>🎁 랜덤박스 — ${BOX.map(b => `${b.icon} ${b.name}(${b.desc})`).join(' · ')}</td><td>전체</td><td>꽝 없음</td></tr>
+          <tr><td>🎁 랜덤박스 — 회복·방패·강화탄·번개·유성우·순간이동·위치교환·추가행동·폭탄</td><td>전체</td><td>꽝 없음</td></tr>
         </table>
         <h3>증강 (공격 스타일)</h3>
         <table>

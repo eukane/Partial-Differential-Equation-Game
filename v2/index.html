@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>미분 배틀 ∂</title>
+  <title>미분 배틀 (v2)</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%88%82%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="vendor/katex/katex.min.css">
-  <script src="vendor/katex/katex.min.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=20260925-1">
+  <link rel="stylesheet" href="../vendor/katex/katex.min.css">
+  <script src="../vendor/katex/katex.min.js"></script>
+  <link rel="stylesheet" href="css/style.css?v=20260924-6">
 </head>
 <body>
   <div id="app">
@@ -47,9 +47,9 @@
   <!-- 시작 화면 -->
   <div class="overlay" id="setup">
     <div class="card setup-card">
-      <h1>∂ 미분 배틀</h1>
-      <p class="muted">수학 문제를 맞혀 공격하고, 움직이고, 살아남아라! · 자유 조준 · 증강 · 2~5인 · 턴제/난전</p>
-      <a class="version-link" href="v2/">🕰️ 이전 버전 (v2)</a> <a class="version-link" href="classic/">· 클래식</a>
+      <h1>∂ 미분 배틀 <span class="beta-tag">v2</span></h1>
+      <p class="muted">수학 문제를 맞혀 공격하고, 움직이고, 살아남아라! · 자유 조준 · 증강 · 2~5인 턴제</p>
+      <a class="version-link" href="../">← 최신 버전으로 돌아가기</a>
       <label class="check"><input type="checkbox" id="optTimer" checked> 제한 시간 사용 (기본 45초 / 심화 90초)</label>
 
       <section class="mode">
@@ -88,8 +88,8 @@
   <!-- 범용 모달 -->
   <div class="overlay hidden" id="modal"><div class="card" id="modalCard"></div></div>
 
-  <script src="vendor/mqtt/mqtt.min.js"></script>
-  <script src="js/problems.js?v=20260925-1"></script>
-  <script src="js/game.js?v=20260925-1"></script>
+  <script src="../vendor/mqtt/mqtt.min.js"></script>
+  <script src="js/problems.js?v=20260924-6"></script>
+  <script src="js/game.js?v=20260924-6"></script>
 </body>
 </html>

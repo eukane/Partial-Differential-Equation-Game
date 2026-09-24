@@ -418,21 +418,6 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .count-btn { flex: 1; font-weight: 800; padding: 8px 0; }
 .count-btn.sel { border-color: var(--accent); background: #3a3217; }
 
-.cell.coin::before {
-  content: '🪙'; position: absolute; inset: 0; display: grid; place-items: center;
-  font-size: calc(var(--cell) * .5); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .35));
-  animation: coinSpin 2.4s ease-in-out infinite;
-}
-@keyframes coinSpin { 0%, 70%, 100% { transform: scaleX(1); } 80% { transform: scaleX(-1); } 90% { transform: scaleX(1); } }
-.brawl-state { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #3a1f1f; color: #ffc9b0; font-weight: 700; font-size: .88rem; }
-.pdoing { font-size: .72rem; color: var(--accent); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mode-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.mode-pick button { display: flex; flex-direction: column; gap: 2px; padding: 10px; }
-.mode-pick small { color: var(--muted); font-size: .75rem; }
-.mode-pick button.sel { border-color: var(--accent); background: #3a3217; }
-.lobby-mode { margin: 0; }
-@media (prefers-reduced-motion: reduce) { .cell.coin::before { animation: none; } }
-
 /* ---------------- 과목 선택 ---------------- */
 .step-label { margin: 12px 0 6px; font-weight: 800; font-size: .9rem; }
 .level-card .levels { margin-top: 0; }
