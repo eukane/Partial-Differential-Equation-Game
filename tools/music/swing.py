@@ -37,12 +37,12 @@ SWING = {
 KICK, CLAP, SNARE, CHAT, OHAT, CRASH, RIDE, CHINA, SPLASH = 36, 39, 38, 42, 46, 49, 51, 52, 55
 TOM_L, TOM_M, TOM_H = 41, 45, 48
 
-QUAL = {'m6': [0, 3, 7, 9], '7': [0, 4, 7, 10], 'm7b5': [0, 3, 6, 10], 'M6': [0, 4, 7, 9], 'm': [0, 3, 7]}
-ROOT = {'C': 36, 'D': 38, 'Eb': 39, 'E': 40, 'F': 41, 'G': 43, 'A': 45, 'Bb': 46}
+QUAL = {'m6': [0, 3, 7, 9], '7': [0, 4, 7, 10], 'm7b5': [0, 3, 6, 10], 'M6': [0, 4, 7, 9], 'm7': [0, 3, 7, 10], 'm': [0, 3, 7]}
+ROOT = {'C': 36, 'D': 38, 'Eb': 39, 'E': 40, 'F': 41, 'G': 43, 'A': 45, 'Bb': 46, 'B': 47}
 
 
 def chord(name):
-    for q in ('m7b5', 'm6', 'M6', '7', 'm'):
+    for q in ('m7b5', 'm6', 'M6', 'm7', '7', 'm'):
         if name.endswith(q):
             return ROOT[name[:-len(q)]], QUAL[q]
     return ROOT[name], [0, 4, 7]
@@ -194,6 +194,48 @@ def run16(s, ch, b, st16, notes, vel):
         s.n(ch, b * 16 + st16 + k, m, 1, vel + (8 if k % 4 == 0 else 0))
 
 
+# ---------------------------------------------------------------- 밝은 버전 (D장조, 임시 'swing2')
+# 단조 선율을 D장조로: F→F#, B♭→B, C→C#  /  화음: Dm6→D6, Gm6→G6, B♭7→B7(→Em7 로 가는 2차 도미넌트), Em7♭5→Em7
+PC_BRIGHT = {5: 6, 10: 11, 0: 1}
+CHORD_BRIGHT = {'Dm6': 'DM6', 'Gm6': 'GM6', 'Bb7': 'B7', 'Em7b5': 'Em7'}
+
+
+def bright_note(m):
+    pc = m % 12
+    return m - pc + PC_BRIGHT.get(pc, pc)
+
+
+def bright_prog(prog):
+    return [' '.join(CHORD_BRIGHT.get(c, c) for c in spec.split()) for spec in prog]
+
+
+def bright_line(line):
+    return [(e, bright_note(m), ln) for e, m, ln in line]
+
+
+def rich_intro_bar(s, b, c, i, lead_line):
+    """풍성한 도입: 신스 패드 · 트롬본 저음 · 색소폰 화음 · 약음기 트럼펫 응답 · 셰이커와 가벼운 박수·킥"""
+    tn = tones(bar_chords(c)[0][1], 4)
+    for m in tn:
+        s.n('spad', b * 16, m, 16, 72)
+    s.n('tbn', b * 16, tn[0] - 12 if tn[0] > 55 else tn[0], 16, 78)
+    # 색소폰이 클라리넷 선율 3도 아래로 화음
+    for e, m, ln in lead_line:
+        below = max((t for t in tn + [x + 12 for x in tn] + [x - 12 for x in tn] if t < m), default=m - 4)
+        play_line(s, 'sax', b, [(e, below, ln)], 68)
+    if i % 2 == 1:
+        play_line(s, 'mute', b, [(4, tn[2] + 12, 1), (5, tn[3] + 12 if len(tn) > 3 else tn[1] + 12, 1), (6, tn[0] + 24, 2)], 86)
+    if i == 0:
+        run16(s, 'piano', b, 0, [tn[0], tn[1], tn[2], tn[0] + 12, tn[1] + 12, tn[2] + 12, tn[0] + 24, tn[1] + 24], 70)
+    for e in range(8):
+        s.n('drums', b * 16 + e8(e), 70, 0.8, 52 + (14 if e % 2 == 0 else 0))  # 마라카스
+    for q in (4, 12):
+        s.n('drums', b * 16 + q, CLAP, 1, 58 + i * 8)
+    if i >= 2:
+        for q in (0, 8):
+            s.n('drums', b * 16 + q, KICK, 1, 88)
+
+
 # 색소폰 솔로: (8분음표 선율) + [(16분음표 시작, 런)]
 SOLO = [
     ([(0, 69, 1), (1, 74, 1), (2, 77, 1), (3, 81, 1), (4, 83, 2), (6, 81, 1), (7, 77, 1)], []),
@@ -207,23 +249,37 @@ SOLO = [
 ]
 
 
-def swing_battle():
+def swing_battle(bright=False):
     s = Song(140, SWING)
+    prog = bright_prog(PROG) if bright else PROG
+    mel_a = [bright_line(l) for l in MEL_A] if bright else MEL_A
+    mel_b = [bright_line(l) for l in MEL_B] if bright else MEL_B
+    solo_data = [(bright_line(l), [(st, [bright_note(m) for m in ns]) for st, ns in r]) for l, r in SOLO] if bright else SOLO
     bar = 0
     # 도입 4마디: 기타·피아노 위로 클라리넷이 선율을 살짝 (저음 없음)
-    intro = ['Dm6', 'Dm6', 'Gm6', 'A7']
+    intro = prog[:4]
     for i, c in enumerate(intro):
         b = bar + i
         rhythm(s, b, c, 0)
         pad_and_piano(s, b, c, 0)
-        play_line(s, 'clar', b, MEL_A[i], 84)
+        play_line(s, 'clar', b, mel_a[i], 84)
+        if bright:
+            rich_intro_bar(s, b, c, i, mel_a[i])
     bar += 4
     # 빌드업 4마디: 하이햇·반박 킥·콘트라베이스, 약음기 트럼펫, 마지막은 스톱 + 라이저
-    for i, c in enumerate(PROG[4:]):
+    for i, c in enumerate(prog[4:]):
         b = bar + i
         rhythm(s, b, c, 1, kick=False, stop=(i == 3))
         pad_and_piano(s, b, c, 1)
-        play_line(s, 'mute', b, MEL_A[4 + i], 104)
+        play_line(s, 'mute', b, mel_a[4 + i], 104)
+        if bright:
+            tn = tones(bar_chords(c)[0][1], 4)
+            for m in tn:
+                s.n('spad', b * 16, m, 16, 76)
+            s.n('tbn', b * 16, tn[0] - 12 if tn[0] > 55 else tn[0], 12, 84)
+            play_line(s, 'sax', b, [(e, m - 4 if m % 12 not in (2, 9) else m - 5, ln) for e, m, ln in mel_a[4 + i]], 78)
+            for e in range(8):
+                s.n('drums', b * 16 + e8(e), 70, 0.8, 56 + (14 if e % 2 == 0 else 0))
         if i < 3:
             for q in (0, 8):
                 s.n('drums', b * 16 + q, KICK, 1, 100)
@@ -234,12 +290,12 @@ def swing_battle():
     loop_start = bar
 
     def drop(b0, big):
-        for i, c in enumerate(PROG):
+        for i, c in enumerate(prog):
             b = b0 + i
             last = i == 7
             rhythm(s, b, c, 2, stop=last)
             pad_and_piano(s, b, c, 2)
-            line = MEL_B[i] if not last else MEL_B[i][:1]
+            line = mel_b[i] if not last else mel_b[i][:1]
             play_line(s, 'sax', b, line, 114)
             play_line(s, 'tpt', b, line, 104 if big else 94, 12 if big and i in (0, 4) else 0)
             play_line(s, 'lead', b, line, 74, 12 if (big or i % 2) else 0)
@@ -251,16 +307,16 @@ def swing_battle():
             if i == 4:
                 s.n('drums', b * 16, CRASH, 8, 112)
                 s.n('hit', b * 16, tones(c, 4)[0] + 12, 2, 110)
-        slam(s, b0, PROG[0], big)
+        slam(s, b0, prog[0], big)
         build_up(s, b0 + 7)
 
     def solo(b0):
-        for i, c in enumerate(PROG):
+        for i, c in enumerate(prog):
             b = b0 + i
             last = i == 7
             rhythm(s, b, c, 2, stop=last)
             pad_and_piano(s, b, c, 2)
-            line, runs = SOLO[i]
+            line, runs = solo_data[i]
             play_line(s, 'sax', b, line, 118)
             for st, notes in runs:
                 run16(s, 'sax', b, st, notes, 110)
@@ -271,18 +327,18 @@ def swing_battle():
                         s.n('mute', b * 16 + e8(e), m, 1.2, 84)
             if i % 4 == 0:
                 s.n('drums', b * 16, CRASH, 8, 100)
-        slam(s, b0, PROG[0])
+        slam(s, b0, prog[0])
         s.n('riser', (b0 + 7) * 16, 60, 16, 110)
         for k in range(8, 15):
             s.n('drums', (b0 + 7) * 16 + k, SNARE, 1, 80 + k * 3)
 
     def breakdown(b0):
         # 하이햇·킥 없이 → 3마디째 킥 돌아옴 → 4마디째 스톱 + 빌드업
-        for i, c in enumerate(PROG[:4]):
+        for i, c in enumerate(prog[:4]):
             b = b0 + i
             rhythm(s, b, c, 1, kick=(i == 2), hats=False, stop=(i == 3))
             pad_and_piano(s, b, c, 1)
-            play_line(s, 'clar', b, MEL_A[i], 96)
+            play_line(s, 'clar', b, mel_a[i], 96)
             for m in tones(c, 4):
                 s.n('spad', b * 16, m, 16, 70)
         s.n('drums', b0 * 16, CRASH, 12, 90)
@@ -294,9 +350,9 @@ def swing_battle():
     drop(bar, True); bar += 8
     loop_end = bar
     # 반복 지점 뒤: 첫 드롭의 '팡' 을 한 번 더 (잔향용)
-    rhythm(s, bar, PROG[0], 2)
-    slam(s, bar, PROG[0])
-    s.save('swing-battle')
+    rhythm(s, bar, prog[0], 2)
+    slam(s, bar, prog[0])
+    s.save('swing2-battle' if bright else 'swing-battle')
     return {'loopStart': s.sec(loop_start), 'loopEnd': s.sec(loop_end)}
 
 
@@ -359,10 +415,10 @@ def swing_pinch():
 
 
 # ---------------------------------------------------------------- swing-victory
-def swing_victory():
+def swing_victory(bright=False):
     s = Song(140, SWING)
     # 금관 쇼트 → D장6 화음으로 '짜잔' + 드럼 필
-    hits = [(0, 'Gm6'), (8 / 3, 'A7'), (6, 'A7')]
+    hits = [(0, 'GM6' if bright else 'Gm6'), (8 / 3, 'A7'), (6, 'A7')]
     for at, c in hits:
         for m in tones(c, 4):
             s.n('brass', at, m, 1.5, 110)
@@ -385,12 +441,14 @@ def swing_victory():
     s.n('drums', end, KICK, 1, 120)
     s.n('boom', end, 36, 8, 127)
     s.n('drums', end, CHINA, 8, 110)
-    s.save('swing-victory')
+    s.save('swing2-victory' if bright else 'swing-victory')
     return {}
 
 
 def main():
-    return {'swing-battle': swing_battle(), 'swing-pinch': swing_pinch(), 'swing-victory': swing_victory()}
+    return {'swing-battle': swing_battle(), 'swing-pinch': swing_pinch(), 'swing-victory': swing_victory(),
+            # 임시: 밝은 D장조 + 풍성한 도입 (위기 테마는 swing-pinch 를 같이 쓴다)
+            'swing2-battle': swing_battle(True), 'swing2-victory': swing_victory(True)}
 
 
 if __name__ == '__main__':

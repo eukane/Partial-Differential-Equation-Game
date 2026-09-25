@@ -228,7 +228,10 @@
     const toggleSound = () => { if (window.Music) { Music.toggle(); renderSound(); } };
     $('#btnSound').onclick = toggleSound;
     $('#mSound').onclick = toggleSound;
-    const nextBgm = () => setBgm(window.Music && Music.style === 'swing' ? 'orch' : 'swing');
+    const nextBgm = () => {
+      const keys = Object.keys(BGM_STYLES), cur = window.Music ? Music.style : 'swing';
+      setBgm(keys[(keys.indexOf(cur) + 1) % keys.length]);
+    };
     $('#btnBgm').onclick = nextBgm;
     $('#mBgm').onclick = nextBgm;
     renderSound();
@@ -426,6 +429,7 @@
 
   const BGM_STYLES = {
     swing: { icon: '🎷', name: '일렉트로스윙', short: '🎷 스윙' },
+    swing2: { icon: '🌞', name: '밝은 스윙 (임시)', short: '🌞 스윙B' },
     orch: { icon: '🎺', name: '오케스트라 록', short: '🎺 오케' },
   };
   function setBgm(st) {
