@@ -112,6 +112,10 @@
     spear: p => { noise('game', { f: 2400, f2: 500, dur: 0.16, vol: 0.4, q: 2 }); tone('game', { f: 320 * p, f2: 140, dur: 0.12, type: 'triangle', vol: 0.25, at: 0.1 }); },
     vampire: p => { tone('game', { f: 180 * p, f2: 110, dur: 0.45, type: 'sawtooth', vol: 0.14 }); tone('game', { f: 500 * p, f2: 950 * p, dur: 0.3, vol: 0.14, at: 0.25, vib: 12 }); },
     chain: p => { for (let i = 0; i < 12; i++) noise('game', { filter: 'highpass', f: 3000 + Math.random() * 3000, dur: 0.03, vol: 0.3, at: Math.random() * 0.4 }); tone('game', { f: 700 * p, f2: 2200, dur: 0.4, type: 'sawtooth', vol: 0.08 }); },
+    boomerang: p => { noise('game', { f: 500, f2: 2200, dur: 0.3, vol: 0.28, q: 4 }); noise('game', { f: 2200, f2: 500, dur: 0.3, vol: 0.28, q: 4, at: 0.38 }); tone('game', { f: 420 * p, f2: 620 * p, dur: 0.5, type: 'triangle', vol: 0.08, vib: 14 }); },
+    grapple: p => { [0, 0.05, 0.1].forEach(at => tone('game', { f: 1800 * p, dur: 0.05, type: 'square', vol: 0.08, at })); noise('game', { f: 3000, f2: 700, dur: 0.25, vol: 0.3, at: 0.12 }); tone('game', { f: 180 * p, f2: 90, dur: 0.15, type: 'triangle', vol: 0.25, at: 0.34 }); },
+    shockwave: p => { boom('game', 0, 0.55, 0.45); noise('game', { f: 200, f2: 1600, dur: 0.45, vol: 0.3, q: 2 }); tone('game', { f: 120 * p, f2: 60, dur: 0.4, type: 'sawtooth', vol: 0.1 }); },
+    homing: p => [0, 0.18].forEach(at => { tone('game', { f: 500 * p, f2: 1900 * p, dur: 0.35, vol: 0.12, at, vib: 25 }); noise('game', { filter: 'highpass', f: 3000, dur: 0.2, vol: 0.12, at }); }),
     whirl: () => { noise('game', { f: 300, f2: 2600, dur: 0.35, vol: 0.35, q: 3 }); noise('game', { f: 2600, f2: 300, dur: 0.35, vol: 0.3, q: 3, at: 0.3 }); },
   };
 

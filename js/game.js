@@ -28,7 +28,7 @@
   const TOP_TILT = 14;      // 전체 보기 기울기
   const HP_CHOICES = [100, 150, 200, 300];   // 시작 전에 고르는 체력
   const DEFAULT_HP = 150;
-  const POWER_MULT = 1.75;  // 강화탄 배율
+  const POWER_MULT = 1.5;   // 강화탄 배율 (다음 공격의 첫 타격에만)
   const BUMP_DMG = 10;
 
   const MAX_PLAYERS = 5;
@@ -75,7 +75,7 @@
 
   const BOX = [
     { id: 'heal',   icon: '💚', name: '회복',     desc: 'HP +40',                          w: 4 },
-    { id: 'power',  icon: '💥', name: '강화탄',   desc: '다음 공격 피해 1.75배',            w: 4 },
+    { id: 'power',  icon: '💥', name: '강화탄',   desc: '다음 공격의 첫 타격 피해 1.5배',   w: 4 },
     { id: 'bolt',   icon: '⚡', name: '번개',     desc: '무작위 적 1명에게 30 피해',         w: 3 },
     { id: 'meteor', icon: '☄️', name: '유성우',   desc: '모든 적에게 18 피해',              w: 2 },
     { id: 'tele',   icon: '🌀', name: '순간이동', desc: '무작위 빈 칸으로 이동 + HP +15',    w: 2 },
@@ -914,10 +914,15 @@
   // ------------------------------------------------------------------
   const SNIPER_TURN = 30;     // 저격: 한 턴에 돌릴 수 있는 조준 각도 (턴 시작 방향 ±)
   const SNIPER_BOUNCES = 2;   // 저격 탄: 관통하며 벽에 두 번 튕긴다 (같은 적을 여러 번 맞힐 수 있음)
+  const RICO_BOUNCES = 4, RICO_BONUS = 0.5;   // 도탄: 관통 없이 최대 4번 튕기고, 튕길 때마다 피해 +50%
+  const BOOMERANG_LEN = 3.5;  // 부메랑: 날아가는 거리
+  const GRAPPLE_LEN = 5.5;    // 갈고리: 닿는 거리
+  const WAVE_R = 3.2, WAVE_HALF = 45;   // 충격파: 반지름, 부채꼴 반각
+  const HOMING_R = 5;         // 유도탄: 노리는 거리
   const STYLES = {
     sniper:   { icon: '🎯', name: '저격', desc: `관통하며 벽에 ${SNIPER_BOUNCES}번 튕기는 탄. 튕긴 탄이 같은 적을 또 맞힐 수 있음 (자신은 안 맞음). 대신 한 턴에 조준을 ±${SNIPER_TURN}°까지만 돌릴 수 있음`, aim: true, dmg: { easy: 16, hard: 22 } },
     shotgun:  { icon: '💥', name: '산탄', desc: '조준 방향 ±20° 세 갈래, 사거리 3칸. 겹쳐 맞으면 누적', aim: true, dmg: { easy: 17, hard: 22 } },
-    ricochet: { icon: '🌀', name: '도탄', desc: '조준 방향으로 쏘면 벽에 3번 튕기며 관통. 튕긴 탄에 자신도 맞을 수 있음', aim: true, dmg: { easy: 13, hard: 18 } },
+    ricochet: { icon: '🌀', name: '도탄', desc: `튕김탄. 관통하지 않고 처음 맞는 적에게 멈추지만, 벽에 튕길 때마다 피해 +${RICO_BONUS * 100}% (최대 ${RICO_BOUNCES}번). 튕긴 탄에 자신도 맞을 수 있음`, aim: true, dmg: { easy: 14, hard: 19 } },
     bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
     rook:     { icon: '➕', name: '룩', desc: '가로·세로 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
     knight:   { icon: '🐴', name: '나이트', desc: 'L자 칸(체스 나이트 이동)을 골라 뛰어들어, 착지한 곳 주변 8칸의 적을 모두 타격', target: true, dmg: { easy: 28, hard: 37 } },
@@ -930,6 +935,10 @@
     vampire:  { icon: '🧛', name: '흡혈', desc: '조준 방향 직선, 처음 맞는 적. 준 피해의 1/3 만큼 회복', aim: true, dmg: { easy: 19, hard: 26 } },
     chain:    { icon: '🌩️', name: '체인 번개', desc: '4칸 안의 가장 가까운 적부터 3칸 안의 다음 적으로 튕기며 최대 3명', dmg: { easy: 20, hard: 28 } },
     whirl:    { icon: '🌪️', name: '회오리', desc: '주변 2칸(5×5) 안의 모든 적을 휩쓸기', dmg: { easy: 25, hard: 33 } },
+    boomerang: { icon: '🪃', name: '부메랑', desc: `조준 방향으로 ${BOOMERANG_LEN - 0.5}칸 날아갔다 돌아오며, 가는 길·오는 길에 한 번씩 관통 타격 (자신은 안 맞음)`, aim: true, dmg: { easy: 17, hard: 23 } },
+    grapple:  { icon: '🪝', name: '갈고리', desc: `조준 방향 ${GRAPPLE_LEN - 0.5}칸 안의 첫 적에게 피해를 주고 내 바로 앞 칸으로 끌어옴`, aim: true, dmg: { easy: 24, hard: 32 } },
+    shockwave: { icon: '🌊', name: '충격파', desc: `조준 방향 ${WAVE_HALF * 2}° 부채꼴, ${Math.floor(WAVE_R)}칸 안의 모든 적에게 피해 + 1칸 밀쳐냄`, aim: true, dmg: { easy: 22, hard: 30 } },
+    homing:   { icon: '💫', name: '유도탄', desc: `${HOMING_R}칸 안의 가장 가까운 적 두 명에게 한 발씩 (한 명뿐이면 두 발 모두). 벽을 무시하고 따라감`, dmg: { easy: 16, hard: 22 } },
   };
   const STYLE_KEYS = Object.keys(STYLES);
   const OFFER_N = 3;
@@ -1027,7 +1036,7 @@
     const count = plan => {
       let v = 0;
       const seen = new Map();
-      for (const r of plan.rays) for (const h of r.hits) seen.set(h.q, (seen.get(h.q) || 0) + 1);
+      for (const r of plan.rays) for (const h of r.hits) seen.set(h.q, (seen.get(h.q) || 0) + (style === 'ricochet' ? 1 + RICO_BONUS * h.bounces : 1));
       for (const [x, y, w] of plan.cells) { const q = at(x, y); if (q) seen.set(q, (seen.get(q) || 0) + w); }
       for (const [q, n] of seen) v += q === p ? -1.5 * n : Math.min(n, 2) * (q.hp <= 40 ? 1.3 : 1);
       return v;
@@ -1614,7 +1623,32 @@
     switch (style) {
       case 'sniper': ray(p.ang, { bounces: SNIPER_BOUNCES, pierce: true, multi: true, noSelf: true }); break;
       case 'shotgun': [-20, 0, 20].forEach(d => ray(p.ang + d, { maxLen: 3.5 })); break;
-      case 'ricochet': ray(p.ang, { bounces: 3, pierce: true }); break;
+      case 'ricochet': ray(p.ang, { bounces: RICO_BOUNCES }); break;   // 관통 없음, 튕긴 뒤엔 자신도 맞을 수 있음
+      case 'boomerang': {
+        const out = traceRay(p, ox, oy, p.ang, { maxLen: BOOMERANG_LEN, pierce: true });
+        const end = out.pts[out.pts.length - 1], len = Math.hypot(end[0] - ox, end[1] - oy);
+        const back = traceRay(p, end[0], end[1], p.ang + 180, { maxLen: len, pierce: true, noSelf: true });
+        back.delay = Math.max(350, (len / 12) * 1000);   // 다 날아간 뒤에 돌아온다
+        rays.push(out, back);
+        break;
+      }
+      case 'grapple': ray(p.ang, { maxLen: GRAPPLE_LEN }); break;
+      case 'shockwave':
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+          if (!inB(x, y) || (x === p.x && y === p.y)) continue;
+          if (Math.hypot(x - p.x, y - p.y) <= WAVE_R && Math.abs(angDiff(angTo(p, x, y), p.ang)) <= WAVE_HALF) cells.push([x, y, 1]);
+        }
+        break;
+      case 'homing': {
+        const foes = enemies(p).map(q => ({ q, d: Math.hypot(q.x - p.x, q.y - p.y) })).filter(o => o.d <= HOMING_R)
+          .sort((a, b) => a.d - b.d || a.q.id - b.q.id);
+        const picks = foes.length ? [foes[0], foes[1] || foes[0]] : [];
+        picks.forEach((o, i) => {
+          const at = [o.q.x + 0.5, o.q.y + 0.5];
+          rays.push({ pts: [[ox, oy], at], hits: [{ q: o.q, d: o.d, bounces: 0, at }], delay: i * 180 });
+        });
+        break;
+      }
       case 'bishop': [45, 135, 225, 315].forEach(a => ray(a)); break;
       case 'rook': [0, 90, 180, 270].forEach(a => ray(a)); break;
       case 'knight': {
@@ -1695,11 +1729,15 @@
       if (q) marked.add(q);
     }
     // 이대로 쏘면 맞는 적 표시 (여러 번 맞으면 ×n)
-    const times = new Map();
-    for (const r of plan.rays) for (const h of r.hits) times.set(h.q, (times.get(h.q) || 0) + 1);
+    const times = new Map(), bonus = new Map();
+    for (const r of plan.rays) for (const h of r.hits) {
+      times.set(h.q, (times.get(h.q) || 0) + 1);
+      if (p.style === 'ricochet' && h.bounces) bonus.set(h.q, Math.round(RICO_BONUS * 100 * h.bounces));
+    }
     for (const q of marked) {
       svg('circle', { class: 'guide-hit', cx: q.x + 0.5, cy: q.y + 0.5, r: 0.46 });
-      if ((times.get(q) || 0) > 1) svg('text', { class: 'guide-times', x: q.x + 0.95, y: q.y + 0.2 }).textContent = `×${times.get(q)}`;
+      const label = bonus.has(q) ? `+${bonus.get(q)}%` : (times.get(q) || 0) > 1 ? `×${times.get(q)}` : '';
+      if (label) svg('text', { class: 'guide-times', x: q.x + 0.95, y: q.y + 0.2 }).textContent = label;
     }
     // 저격: 이번 턴에 돌릴 수 있는 조준 범위
     if (aimLimited(p) && myTurn()) {
@@ -1715,14 +1753,28 @@
     }
   }
 
+  /** 말을 (x, y) 로 옮긴다 (판 안의 빈 칸일 때만) */
+  function shove(q, x, y, why) {
+    if ((x === q.x && y === q.y) || !inB(x, y) || at(x, y)) return false;
+    burst(q.x + 0.5, q.y + 0.5, '#9be7ff');
+    q.x = x; q.y = y;
+    renderPieces();
+    burst(x + 0.5, y + 0.5, '#9be7ff');
+    log(`${tag(q)} ${coord(x, y)} 로 ${why}`);
+    return true;
+  }
+
   async function doAttack(p, level, fast, target) {
     const s = STYLES[p.style] || STYLES.sniper;
-    let dmg = styleDmg(s, level) + (fast ? FAST_DMG : 0);
+    const dmg = styleDmg(s, level) + (fast ? FAST_DMG : 0);
+    // 강화탄: 이번 공격의 첫 타격에만 배율
+    let boost = 1;
     if (p.power) {
-      dmg = Math.round(dmg * POWER_MULT);
+      boost = POWER_MULT;
       p.power = false;
-      log(`${tag(p)} 💥 강화탄 발동! 피해 ${POWER_MULT}배`);
+      log(`${tag(p)} 💥 강화탄 발동! 첫 타격 피해 ${POWER_MULT}배`);
     }
+    const hitDmg = (mult = 1) => { const v = Math.round(dmg * mult * boost); boost = 1; return v; };
     let tgt = target;
     let tgts = tgt ? [tgt] : [];
     if (p.style === 'scatter') {
@@ -1763,15 +1815,16 @@
     const plan = planAttack(p, p.style, p.style === 'knight' ? [p.x, p.y] : p.style === 'scatter' ? tgts : tgt);
     let hitCount = 0;
     p.atk = (p.atk || 0) + 1;
-    await Promise.all(plan.rays.map(r => animatePath(r.pts, p.color, 12, r.hits.map(h => ({
+    await Promise.all(plan.rays.map(r => sleep(r.delay || 0).then(() => animatePath(r.pts, p.color, 12, r.hits.map(h => ({
       d: h.d,
       fn: () => {
         hitCount++;
         burst(h.at[0], h.at[1], '#ff5d6c');
-        const dealt = damage(h.q, dmg, p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회)` : ''}`);
+        const mult = p.style === 'ricochet' ? 1 + RICO_BONUS * h.bounces : 1;
+        const dealt = damage(h.q, hitDmg(mult), p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회${p.style === 'ricochet' ? ` +${Math.round(RICO_BONUS * 100 * h.bounces)}%` : ''})` : ''}`);
         if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 3));
       },
-    })))));
+    }))))));
     if (plan.cells.length) {
       if (p.style === 'mortar') await animatePath([[p.x + 0.5, p.y + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], '#ff9f43', 10);
       for (const [x, y] of plan.cells) burst(x + 0.5, y + 0.5, p.style === 'mortar' ? '#ff9f43' : p.style === 'whirl' ? '#9be7ff' : p.color);
@@ -1779,8 +1832,19 @@
       await sleep(250);
       for (const [x, y, w] of plan.cells) {
         const q = at(x, y);
-        if (q) { hitCount++; damage(q, Math.round(dmg * w), p, s.name); }
+        if (q) { hitCount++; damage(q, hitDmg(w), p, s.name); }
       }
+    }
+    // 갈고리: 맞은 적을 내 앞 칸으로 · 충격파: 맞은 적을 1칸 밀쳐냄
+    if (p.style === 'grapple') {
+      const h = plan.rays[0] && plan.rays[0].hits[0];
+      if (h && h.q.alive) shove(h.q, p.x + Math.sign(h.q.x - p.x), p.y + Math.sign(h.q.y - p.y), '끌려왔다');
+    }
+    if (p.style === 'shockwave') {
+      const hit = plan.cells.map(([x, y]) => at(x, y)).filter(q => q && q !== p && q.alive);
+      // 먼 적부터 밀어야 앞의 적이 뒤의 적에게 막히지 않는다
+      hit.sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y) || a.id - b.id);
+      for (const q of hit) shove(q, q.x + Math.sign(q.x - p.x), q.y + Math.sign(q.y - p.y), '밀려났다');
     }
     if (cross) cross.remove();
     if (hitCount) p.landed = (p.landed || 0) + 1;
@@ -2774,9 +2838,12 @@
       place(i, x, y, ang) { const p = S.players[i]; p.x = x; p.y = y; if (ang != null) { p.ang = ang; p.aimBase = ang; } renderAll(); },
       hits(i) {
         const p = S.players[i], plan = planAttack(p, p.style, null), out = {};
-        for (const r of plan.rays) for (const h of r.hits) out[h.q.name] = (out[h.q.name] || 0) + 1;
+        for (const r of plan.rays) for (const h of r.hits) (out[h.q.name] = out[h.q.name] || []).push(h.bounces);
+        for (const [x, y] of plan.cells) { const q = at(x, y); if (q) (out[q.name] = out[q.name] || []).push('cell'); }
         return out;
       },
+      /** 테스트용: i 번 말이 지금 실제로 공격 (심화, 빠른 정답 아님) */
+      async attack(i, power = false) { const p = S.players[i]; p.power = power; await doAttack(p, 'hard', false, null); return S.players.map(q => ({ name: q.name, hp: q.hp, x: q.x, y: q.y })); },
       state() {
         return { phase: S.phase, round: S.round,
           players: S.players.map(p => ({ style: p.style, hp: p.hp, alive: p.alive, dealt: p.dealt || 0, atk: p.atk || 0, landed: p.landed || 0 })) };
