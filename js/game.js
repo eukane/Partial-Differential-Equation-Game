@@ -398,6 +398,7 @@
     b.setProperty('--tilt', tilt + 'deg');
     b.setProperty('--tx', (N / 2 - fx) * S.cell + 'px');
     b.setProperty('--ty', (N / 2 - fy) * S.cell + 'px');
+    for (const p of S.players) { const n = el.pieces.querySelector(`[data-id="${p.id}"]`); if (n && p.style) faceFlip(n, p); }
     b.setProperty('--lift', lift + 'px');
     b.setProperty('--dz', dz + 'px');
     el.compass.style.transform = `rotate(${S.ang}deg)`;
@@ -551,7 +552,7 @@
     updateMusic();
     el.playerList.innerHTML = S.players.map(p => `
       <div class="pcard ${p === cur() && S.phase !== 'over' ? 'active' : ''} ${p.alive ? '' : 'dead'}" style="--pc:${p.color}">
-        <span class="pemoji">${p.emoji}</span>
+        <span class="pemoji">${face(p)}</span>
         <div class="pinfo">
           <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${p.bot ? ' <span class="chip bot">AI</span>' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
           <div class="hp"><div class="hp-fill" style="width:${p.hp / S.maxHp * 100}%"></div></div>
@@ -576,11 +577,38 @@
       node.style.setProperty('--y', p.y);
       node.style.setProperty('--face', p.ang + 'deg');
       node.style.setProperty('--pc', p.color);
+      // 직업(증강)을 고르면 동물 대신 그 직업 캐릭터로
+      const ch = p.style && window.Chars && Chars.has(p.style) ? p.style : '';
+      const av = node.querySelector('.avatar');
+      if (av.dataset.ch !== ch) {
+        av.dataset.ch = ch;
+        av.classList.toggle('char', !!ch);
+        node.classList.toggle('chared', !!ch);
+        av.innerHTML = ch ? `<div class="flip">${Chars.svg(ch)}</div>` : p.emoji;
+      }
+      if (ch) {
+        faceFlip(node, p);
+        if (!p.alive && !node.classList.contains('dead')) charPlay(p, 'ko');
+      }
       node.classList.toggle('current', p === cur() && ['choose', 'rotate', 'busy'].includes(S.phase));
       node.classList.toggle('dead', !p.alive);
       node.querySelector('.mini-hp i').style.width = (p.hp / S.maxHp * 100) + '%';
       node.querySelector('.badges').textContent = (p.shield ? '🛡️' : '') + (p.power ? '💥' : '');
     }
+  }
+
+  /** 목록·차례 칸의 얼굴: 직업을 골랐으면 그 캐릭터(멈춘 그림), 아니면 동물 */
+  const face = p => (p.style && window.Chars && Chars.has(p.style)
+    ? `<span class="mini-ch" style="--pc:${p.color}">${Chars.svg(p.style).replace('st-idle', 'st-still')}</span>` : p.emoji);
+  /** 캐릭터가 조준 방향(화면 기준 왼쪽/오른쪽)을 바라보게 */
+  function faceFlip(node, p) {
+    const s = Math.sin((p.ang + (S.ang || 0)) * Math.PI / 180);
+    if (Math.abs(s) > 0.15) node.style.setProperty('--flip', s < 0 ? -1 : 1);
+  }
+  /** 판 위 직업 캐릭터 동작: 'attack' | 'hit' | 'ko' | 'win' */
+  function charPlay(p, st) {
+    const svgEl = el.pieces && el.pieces.querySelector(`[data-id="${p.id}"] .avatar svg`);
+    if (svgEl && window.Chars) Chars.play(svgEl, st);
   }
 
   function renderTurn() {
@@ -591,7 +619,7 @@
     }
     const head = `
       <div class="turn-head" style="--pc:${p.color}">
-        <span class="big">${p.emoji}</span>
+        <span class="big">${face(p)}</span>
         <div><b>${esc(p.name)}</b> 차례 ${S.extraActive ? '<span class="chip extra">⏩ 추가 행동</span>' : ''}<br>
         <small>${coord(p.x, p.y)} · 조준 ${Math.round(p.ang)}° ${p.style ? `· ${STYLES[p.style].icon} ${STYLES[p.style].name}` : ''}</small></div>
       </div>`;
@@ -768,6 +796,7 @@
     node.classList.remove('hit');
     void node.offsetWidth;
     node.classList.add('hit');
+    charPlay(p, 'hit');
   }
 
   let toastTimer = null;
@@ -883,6 +912,7 @@
     renderAll();
     if (window.Music) Music.victory();
     const w = left[0];
+    if (w) charPlay(w, 'win');
     const top = Math.max(...S.players.map(p => p.score));
     const stats = S.players.map(p => `<tr><td>${p.emoji} ${esc(p.name)}</td><td>${p.alive ? p.hp : '탈락'}</td><td>${p.correct}/${p.tries}</td><td>${p.score}${p.score === top && top > 0 ? ' 🏅' : ''}</td></tr>`).join('');
     const c = openModal(`
@@ -1801,6 +1831,8 @@
       toast(`${s.icon} ${s.name}!`);
     }
     if (window.Sfx && p.style !== 'knight') Sfx.attack(p.style, p.id);
+    faceFlip(el.pieces.querySelector(`[data-id="${p.id}"]`) || document.createElement('i'), p);
+    charPlay(p, 'attack');
     if (p.style === 'knight') {
       // 공격 시점에 다시 확인 (난전에서는 그사이 누가 그 칸에 들어왔을 수 있다) → 안 되면 제자리에서 내려찍기
       const ok = tgt && KNIGHT_JUMPS.some(([dx, dy]) => p.x + dx === tgt[0] && p.y + dy === tgt[1]) && inB(tgt[0], tgt[1]) && !at(tgt[0], tgt[1]);
