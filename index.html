@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%88%82%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <script src="vendor/katex/katex.min.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=20260925-20">
+  <link rel="stylesheet" href="css/style.css?v=20260925-21">
 </head>
 <body>
   <div id="app">
@@ -15,7 +15,7 @@
       <div class="brand">∂ 미분 배틀 <small>최대 5인</small></div>
       <div class="round" id="roundInfo"></div>
       <div class="top-actions">
-        <button id="btnSound" class="ghost sound-btn" aria-label="배경음악 켜기/끄기">🔊</button>
+        <button id="btnSound" class="ghost sound-btn" aria-label="소리 설정">🔊</button>
         <button id="btnBgm" class="ghost" title="배경음악 스타일 바꾸기">🎷 스윙</button>
         <button id="btnView" class="ghost" title="플레이어 시점 / 전체 보기 전환 (V)">🧭 전체 보기</button>
         <button id="btnRules" class="ghost">📖 규칙</button>
@@ -90,7 +90,7 @@
       <div class="drawer-head"><b>메뉴</b><button class="ghost" id="btnMenuClose" aria-label="메뉴 닫기">✕</button></div>
       <div class="drawer-actions">
         <button id="mRules">📖 규칙</button>
-        <button id="mSound">🔊 배경음악 켜짐</button>
+        <button id="mSound">🔊 소리 설정</button>
         <button id="mBgm">🎷 배경음악: 일렉트로스윙</button>
         <button id="mView">🧭 전체 보기</button>
         <button id="mLeave" hidden>🚪 방 나가기</button>
@@ -110,8 +110,9 @@
   <div class="overlay hidden" id="modal"><div class="card" id="modalCard"></div></div>
 
   <script src="vendor/mqtt/mqtt.min.js"></script>
-  <script src="js/music.js?v=20260925-20"></script>
-  <script src="js/problems.js?v=20260925-20"></script>
-  <script src="js/game.js?v=20260925-20"></script>
+  <script src="js/music.js?v=20260925-21"></script>
+  <script src="js/sfx.js?v=20260925-21"></script>
+  <script src="js/problems.js?v=20260925-21"></script>
+  <script src="js/game.js?v=20260925-21"></script>
 </body>
 </html>

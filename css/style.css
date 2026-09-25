@@ -554,3 +554,24 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
   .card { padding: 16px; }
   .question { font-size: 1rem; }
 }
+
+/* 소리 설정 패널 (🔊) */
+.sound-panel {
+  position: fixed; top: 58px; right: 12px; z-index: 60; width: min(340px, calc(100vw - 24px));
+  background: #151c33; border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .5); display: flex; flex-direction: column; gap: 10px;
+}
+.sp-head { display: flex; align-items: center; justify-content: space-between; }
+.sp-close { padding: 2px 10px; }
+.sp-master { width: 100%; padding: 9px; border-radius: 10px; font-weight: 700; }
+.sp-master.on { background: #4a2330; border-color: #ff8fa3; color: #ffd0da; }
+.sp-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--card); }
+.sp-row.off { opacity: .55; }
+.sp-mute { flex: none; width: 42px; height: 42px; padding: 0; font-size: 1.25rem; border-radius: 12px; }
+.sp-body { flex: 1; min-width: 0; }
+.sp-label { display: flex; align-items: baseline; gap: 6px; }
+.sp-label small { color: var(--muted); font-size: .72rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: .85rem; }
+.sp-body input[type=range] { width: 100%; accent-color: #ffc53d; margin: 4px 0 0; }
+.sound-panel .small { margin: 0; text-align: center; }
+@media (max-width: 860px) { .sound-panel { top: 50px; right: 8px; } }

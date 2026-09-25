@@ -242,9 +242,11 @@
     $('#mRules').onclick = () => { setMenu(false); showRules(); };
     $('#mView').onclick = () => { setMenu(false); toggleView(); };
     $('#mLeave').onclick = () => { setMenu(false); Net.leave(); };
-    const toggleSound = () => { if (window.Music) { Music.toggle(); renderSound(); } };
-    $('#btnSound').onclick = toggleSound;
-    $('#mSound').onclick = toggleSound;
+    $('#btnSound').onclick = openSoundPanel;
+    $('#mSound').onclick = () => { setMenu(false); openSoundPanel(); };
+    applySound();
+    // 모든 버튼에 짧은 '딸깍'
+    document.addEventListener('click', e => { if (e.target.closest && e.target.closest('button') && !e.target.closest('.choice')) sfx('click'); }, true);
     const nextBgm = () => {
       const keys = Object.keys(BGM_STYLES), cur = window.Music ? Music.style : 'swing';
       setBgm(keys[(keys.indexOf(cur) + 1) % keys.length]);
@@ -431,11 +433,94 @@
     Music.play(p && p.alive && p.hp <= S.maxHp * PINCH_HP ? 'pinch' : 'battle');
   }
 
+  // ---------------- 소리 설정: 음악 · 시스템 · 게임 (각각 음량 + 음소거, 전체 음소거) ----------------
+  const SOUND_KINDS = [
+    { k: 'music', icon: '🎵', name: '음악', desc: '배경음악' },
+    { k: 'sys', icon: '🔔', name: '시스템', desc: '버튼·정답·오답·타이머·내 차례' },
+    { k: 'game', icon: '💥', name: '게임', desc: '타격·피격·이동·랜덤박스' },
+  ];
+  // 설정은 처음 쓸 때 읽는다 (store 가 이 아래에서 정의되므로)
+  let SOUND = null;
+  const loadSound = () => SOUND || (SOUND = (() => {
+    const d = { master: false, music: { v: 70, m: false }, sys: { v: 80, m: false }, game: { v: 90, m: false } };
+    const saved = store.get('pdeb-sound');
+    if (saved && typeof saved === 'object') {
+      d.master = !!saved.master;
+      for (const { k } of SOUND_KINDS) {
+        const x = saved[k];
+        if (x) d[k] = { v: Math.max(0, Math.min(100, Math.round(Number(x.v)) || 0)), m: !!x.m };
+      }
+    } else if (store.get('pdeb-mute') === '1' || store.get('pdeb-mute') === 1) d.music.m = true; // 예전 음악 끄기 설정
+    return d;
+  })());
+  const soundLevel = k => { loadSound(); return SOUND.master || SOUND[k].m ? 0 : SOUND[k].v / 100; };
+  function applySound() {
+    loadSound();
+    store.set('pdeb-sound', SOUND);
+    if (window.Music) Music.setLevel(soundLevel('music'));
+    if (window.Sfx) { Sfx.setLevel('sys', soundLevel('sys')); Sfx.setLevel('game', soundLevel('game')); }
+    renderSound();
+  }
+  const sfx = name => { if (window.Sfx) Sfx.play(name); };
+
+  function openSoundPanel() {
+    loadSound();
+    let box = $('#soundPanel');
+    if (box) { box.remove(); return; }
+    box = document.createElement('div');
+    box.id = 'soundPanel';
+    box.className = 'sound-panel';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', '소리 설정');
+    document.body.appendChild(box);
+    const draw = () => {
+      box.innerHTML = `
+        <div class="sp-head"><b>🔊 소리 설정</b><button class="ghost sp-close" aria-label="닫기">✕</button></div>
+        <button class="sp-master ${SOUND.master ? 'on' : ''}">${SOUND.master ? '🔇 전체 음소거 중 · 눌러서 켜기' : '🔊 전체 음소거'}</button>
+        ${SOUND_KINDS.map(({ k, icon, name, desc }) => `
+          <div class="sp-row ${SOUND[k].m || SOUND.master ? 'off' : ''}">
+            <button class="sp-mute" data-mute="${k}" aria-label="${name} 음소거" title="${name} 음소거">${SOUND[k].m ? '🔇' : icon}</button>
+            <div class="sp-body">
+              <div class="sp-label"><b>${name}</b><small>${desc}</small><span class="sp-val">${SOUND[k].m ? '꺼짐' : SOUND[k].v}</span></div>
+              <input type="range" min="0" max="100" step="5" value="${SOUND[k].v}" data-vol="${k}" aria-label="${name} 음량">
+            </div>
+          </div>`).join('')}
+        <p class="muted small">M 키: 전체 음소거</p>`;
+      box.querySelector('.sp-close').onclick = () => box.remove();
+      box.querySelector('.sp-master').onclick = () => { SOUND.master = !SOUND.master; applySound(); draw(); };
+      box.querySelectorAll('[data-mute]').forEach(b => {
+        b.onclick = () => { const x = SOUND[b.dataset.mute]; x.m = !x.m; applySound(); draw(); };
+      });
+      box.querySelectorAll('[data-vol]').forEach(r => {
+        const k = r.dataset.vol;
+        r.oninput = () => {
+          SOUND[k].v = +r.value; SOUND[k].m = false;
+          applySound();
+          const row = r.closest('.sp-row');
+          row.querySelector('.sp-val').textContent = r.value;
+          row.querySelector('.sp-mute').textContent = SOUND_KINDS.find(x => x.k === k).icon;
+        };
+        // 손을 떼면 미리 들려준다
+        r.onchange = () => { if (k !== 'music' && window.Sfx) Sfx.sample(k); };
+      });
+    };
+    draw();
+    // 바깥을 누르면 닫힌다
+    setTimeout(() => {
+      const away = e => {
+        if (!document.body.contains(box)) { document.removeEventListener('pointerdown', away, true); return; }
+        if (!box.contains(e.target) && !e.target.closest('#btnSound, #mSound')) { box.remove(); document.removeEventListener('pointerdown', away, true); }
+      };
+      document.addEventListener('pointerdown', away, true);
+    }, 0);
+  }
+
   function renderSound() {
-    const on = !(window.Music && Music.muted);
+    const all = SOUND_KINDS.every(({ k }) => soundLevel(k) === 0);
+    const on = !all;
     $('#btnSound').textContent = on ? '🔊' : '🔇';
-    $('#btnSound').title = on ? '배경음악 끄기' : '배경음악 켜기';
-    $('#mSound').textContent = on ? '🔊 배경음악 켜짐' : '🔇 배경음악 꺼짐';
+    $('#btnSound').title = '소리 설정 (음악 · 시스템 · 게임)';
+    $('#mSound').textContent = on ? '🔊 소리 설정' : '🔇 소리 설정 (전부 꺼짐)';
     const st = window.Music ? Music.style : 'swing';
     $('#btnBgm').textContent = BGM_STYLES[st].short;
     $('#mBgm').textContent = `${BGM_STYLES[st].icon} 배경음악: ${BGM_STYLES[st].name}`;
@@ -731,6 +816,7 @@
       </div>`;
     el.handover.classList.remove('hidden');
     const go = $('#btnGo');
+    sfx('turn');
     go.focus();
     go.onclick = () => {
       el.handover.classList.add('hidden');
@@ -775,6 +861,7 @@
     renderAll();
     const p = cur();
     toast(myTurn() ? '🔔 내 차례!' : `${p.bot ? '🤖 ' : ''}${p.emoji} ${p.name} 차례`);
+    if (myTurn()) sfx('turn');
     maybeAugment();
     scheduleBot();
   }
@@ -882,7 +969,7 @@
         }).join('')}
       </div>`, 'augment-card');
     c.querySelectorAll('[data-s]').forEach(b => {
-      b.onclick = () => { closeModal(); Net.status(null); if (brawl()) S.myBusy = true; submit({ key: 'pick', style: b.dataset.s }); };
+      b.onclick = () => { sfx('pick'); closeModal(); Net.status(null); if (brawl()) S.myBusy = true; submit({ key: 'pick', style: b.dataset.s }); };
     });
     S.keyHandler = e => {
       const i = '123'.indexOf(e.key);
@@ -1320,6 +1407,8 @@
         const speed = ok ? Math.round(100 * Math.max(0, 1 - elapsed / limit)) : 0;
         const pts = ok ? L.pts + speed : 0;
         const fast = ok && elapsed <= limit * FAST_RATIO;
+        sfx(ok ? 'correct' : i === -1 ? 'timeout' : 'wrong');
+        if (fast) setTimeout(() => sfx('fast'), 250);
         Net.live({ st: 'result', ...liveQ, pk: i, ans: P.answer, ok, sec, ex: P.explain });
         buttons.forEach((b, j) => {
           b.disabled = true;
@@ -1354,6 +1443,9 @@
           fill.style.transform = `scaleX(${left / limit})`;
           numEl.textContent = Math.ceil(left / 1000) + 's';
           if (left <= 10000) fill.classList.add('warn');
+          // 마지막 5초는 1초마다 '틱'
+          const secLeft = Math.ceil(left / 1000);
+          if (secLeft <= 5 && secLeft > 0 && secLeft !== c._lastTick) { c._lastTick = secLeft; sfx('tick'); }
           if (left <= 0) finish(-1);
         };
         tick();
@@ -1378,7 +1470,7 @@
   function heal(p, amt) {
     const before = p.hp;
     p.hp = Math.min(S.maxHp, p.hp + amt);
-    if (p.hp > before) floatText(p, `+${p.hp - before}`, 'heal');
+    if (p.hp > before) { floatText(p, `+${p.hp - before}`, 'heal'); sfx('heal'); }
     renderPlayers(); renderPieces();
     return p.hp - before;
   }
@@ -1389,6 +1481,7 @@
     if (t.shield) {
       t.shield = false;
       floatText(t, '🛡️ 방어!', 'info');
+      sfx('block');
       log(`${tag(t)} 🛡️ 방패로 ${why}을(를) 막았다!`);
       renderPlayers(); renderPieces();
       return 0;
@@ -1397,11 +1490,13 @@
     t.hp = Math.max(0, t.hp - amt);
     floatText(t, `-${amt}`, 'dmg');
     hitFx(t);
+    if (window.Sfx) Sfx.hurt(t.id);
     const self = src === t;
     log(`${self ? '🤕' : '💢'} ${tag(t)} ${why}으로 ${amt} 피해${self ? ' (자폭!)' : ''} → HP ${t.hp}`);
     if (t.hp <= 0) {
       t.alive = false;
       log(`💀 ${tag(t)} 탈락!`);
+      sfx('death');
       toast(`💀 ${t.emoji} ${t.name} 탈락!`, 2200);
     }
     renderPlayers(); renderPieces();
@@ -1589,11 +1684,14 @@
     } else {
       toast(`${s.icon} ${s.name}!`);
     }
+    if (window.Sfx && p.style !== 'knight') Sfx.attack(p.style, p.id);
     if (p.style === 'knight') {
       // 공격 시점에 다시 확인 (난전에서는 그사이 누가 그 칸에 들어왔을 수 있다) → 안 되면 제자리에서 내려찍기
       const ok = tgt && KNIGHT_JUMPS.some(([dx, dy]) => p.x + dx === tgt[0] && p.y + dy === tgt[1]) && inB(tgt[0], tgt[1]) && !at(tgt[0], tgt[1]);
       if (ok) {
+        sfx('jump');
         await animatePath([[p.x + 0.5, p.y + 0.5], [(p.x + tgt[0]) / 2 + 0.5, (p.y + tgt[1]) / 2 + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], p.color, 14);
+        sfx('land');
         burst(p.x + 0.5, p.y + 0.5, p.color);
         [p.x, p.y] = tgt;
         renderPieces();
@@ -1618,7 +1716,7 @@
     if (plan.cells.length) {
       if (p.style === 'mortar') await animatePath([[p.x + 0.5, p.y + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], '#ff9f43', 10);
       for (const [x, y] of plan.cells) burst(x + 0.5, y + 0.5, p.style === 'mortar' ? '#ff9f43' : p.style === 'whirl' ? '#9be7ff' : p.color);
-      if (p.style === 'knight') toast(`${s.icon} 착지!`, 900);
+      if (p.style === 'knight') { toast(`${s.icon} 착지!`, 900); if (window.Sfx) Sfx.attack('king', p.id); }
       await sleep(250);
       for (const [x, y, w] of plan.cells) {
         const q = at(x, y);
@@ -1654,6 +1752,7 @@
   async function flipCoin(p, idx) {
     const heads = rng() < 0.5;
     toast(`🪙 ${p.emoji} 동전 던지기…`, 1200);
+    sfx('coin');
     await sleep(900);
     if (heads) {
       const live = alive();
@@ -1665,10 +1764,12 @@
       live.forEach((q, i) => { burst(q.x + 0.5, q.y + 0.5, '#ffd84d'); [q.x, q.y] = spots[i]; });
       renderPieces();
       toast('🪙 앞면! 모두의 위치가 뒤섞였어요', 2200);
+      sfx('heads');
       log(`${tag(p)} 🪙 동전 앞면 → 모두의 위치를 섞었다!`);
       await sleep(400);
     } else {
       toast('🪙 뒷면… 아무 일도 없었어요', 1600);
+      sfx('tails');
       log(`${tag(p)} 🪙 동전 뒷면`);
     }
     // 쓴 동전 칸은 다른 빈 칸으로 옮겨 간다
@@ -1686,6 +1787,7 @@
       return;
     }
     burst(p.x + 0.5, p.y + 0.5, p.color);
+    if (window.Sfx) Sfx.move(p.id);
     p.x = dest[0];
     p.y = dest[1];
     renderPieces();
@@ -1713,6 +1815,7 @@
     const res = weighted(pool);
     if (brawl()) {
       toast(`${p.emoji} 🎁 ${res.icon} ${res.name}`, 2000);
+      sfx('boxopen');
       log(`${tag(p)} 🎁 랜덤박스: ${res.icon} ${res.name}`);
       await applyBox(p, res);
       await killerBonusBox(p, level, pool, res);
@@ -1726,10 +1829,12 @@
     const slot = c.querySelector('.slot');
     for (let i = 0; i < 16; i++) {
       slot.textContent = pool[Math.floor(Math.random() * pool.length)].icon; // 연출용 (결과와 무관)
+      sfx('boxtick');
       await sleep(55 + i * 10);
     }
     slot.textContent = res.icon;
     slot.classList.add('done');
+    sfx('boxopen');
     c.querySelector('.slot-name').textContent = res.name;
     const desc = c.querySelector('.box-desc');
     desc.textContent = res.desc;
@@ -1760,6 +1865,7 @@
 
   async function applyBox(p, b) {
     const foes = enemies(p);
+    if (b.id !== 'heal' && b.id !== 'meteor') sfx('box_' + b.id);
     switch (b.id) {
       case 'heal': {
         const before = p.hp;
@@ -1781,6 +1887,7 @@
       }
       case 'meteor':
         for (const t of foes) {
+          sfx('box_meteor');
           await animatePath([[t.x - 1.5, t.y - 2.5], [t.x + 0.5, t.y + 0.5]], '#ff9f43', 18);
           burst(t.x + 0.5, t.y + 0.5, '#ff9f43');
           damage(t, 18, p, '유성우');
@@ -2562,7 +2669,7 @@
           <li><b>📐 기하</b>: 포물선·타원·쌍곡선, 벡터의 크기·내적·사잇각, 공간좌표, 구, 정사영</li>
         </ul>
         <h3>단축키</h3>
-        <ul><li>문제: 1~4 · 과목: Q W E R · 난이도: 1/2/3 · 증강: 1~3 · 조준: ← → (Shift: 15°) · 전체 보기: V · 배경음악: M</li></ul>
+        <ul><li>문제: 1~4 · 과목: Q W E R · 난이도: 1/2/3 · 증강: 1~3 · 조준: ← → (Shift: 15°) · 전체 보기: V · 전체 음소거: M (🔊 버튼으로 음악·시스템·게임 음량 따로)</li></ul>
         <p></p>
         <button class="primary full">닫기</button>
       </div>`);
@@ -2575,13 +2682,14 @@
   // ------------------------------------------------------------------
   function onKey(e) {
     if (e.target.tagName === 'INPUT') return;
+    // M: 전체 음소거 (어느 화면에서든)
+    if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey) { loadSound(); SOUND.master = !SOUND.master; applySound(); toast(SOUND.master ? '🔇 전체 음소거' : '🔊 소리 켜짐'); return; }
     if (!el.modal.classList.contains('hidden')) {
       if (S.keyHandler) S.keyHandler(e);
       return;
     }
     if (!el.handover.classList.contains('hidden') || !el.lobby.classList.contains('hidden')) return;
     if (e.key === 'v' || e.key === 'V') toggleView();
-    if (e.key === 'm' || e.key === 'M') $('#btnSound').click();
     if (S.phase === 'choose' && myTurn()) {
       const step = e.shiftKey ? 15 : 5;
       if (e.key === 'ArrowLeft') { e.preventDefault(); setAim(cur().ang - step); }

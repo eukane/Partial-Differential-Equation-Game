@@ -25,12 +25,11 @@
   };
 
   let ctx = null, out = null;
-  let muted = false, want = null, name = null, playing = null; // playing: { src, gain, name }
+  let muted = false, level = 1, want = null, name = null, playing = null; // playing: { src, gain, name }  level: 음량 0~1 (0 이면 멈춤)
   const bufs = {}, loading = {};
   const played = {}; // 한 번 들은 곡은 도입을 건너뛰고 반복 구간부터
   let style = 'swing';
   try {
-    muted = localStorage.getItem('pdeb-mute') === '1';
     const saved = localStorage.getItem('pdeb-bgm');
     if (saved === 'orch') style = saved;
   } catch (e) { /* 저장소 없음 */ }
@@ -44,11 +43,11 @@
     if (!AC) return false;
     ctx = new AC();
     out = ctx.createGain();
-    out.gain.value = VOL;
+    out.gain.value = VOL * level;
     out.connect(ctx.destination);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) ctx.suspend();
-      else if (playing) ctx.resume();
+      else ctx.resume();   // 효과음도 같은 오디오를 쓰므로 음악이 꺼져 있어도 깨운다
     });
     return true;
   }
@@ -130,13 +129,18 @@
       ctx.resume();
       load(file('victory')).then(buf => { if (!want && !muted) startTrack(file('victory'), buf); }).catch(() => {});
     },
-    /** 음소거 전환. 반환값: 지금 음소거 상태 */
-    toggle() {
-      muted = !muted;
-      try { localStorage.setItem('pdeb-mute', muted ? '1' : '0'); } catch (e) { /* 저장소 없음 */ }
-      if (muted) { if (ctx) stopCurrent(0.3); name = null; } else sync();
-      return muted;
+    /** 음악 음량 0~1. 0 이면 재생을 멈추고, 다시 올리면 원래 곡을 이어 튼다 */
+    setLevel(v) {
+      v = Math.max(0, Math.min(1, Number(v) || 0));
+      const was = muted;
+      level = v;
+      muted = v <= 0;
+      if (out) out.gain.setTargetAtTime(VOL * v, ctx.currentTime, 0.05);
+      if (muted && !was) { if (ctx) stopCurrent(0.3); name = null; }
+      else if (!muted && was) sync();
     },
+    /** 효과음과 같이 쓰는 오디오 컨텍스트 (없으면 만든다) */
+    context() { return init() ? ctx : null; },
     /** 첫 터치·클릭 때 오디오를 깨운다 (브라우저 자동재생 제한) */
     unlock() {
       if (muted || !init()) return;
