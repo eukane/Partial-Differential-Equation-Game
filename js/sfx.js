@@ -119,6 +119,22 @@
     whirl: () => { noise('game', { f: 300, f2: 2600, dur: 0.35, vol: 0.35, q: 3 }); noise('game', { f: 2600, f2: 300, dur: 0.35, vol: 0.3, q: 3, at: 0.3 }); },
   };
 
+  /** 무기별 타격음 (game.js 의 맞는 이펙트 이름과 같다) */
+  const IMPACT = {
+    spark: () => { noise('game', { filter: 'highpass', f: 3500, dur: 0.07, vol: 0.4 }); tone('game', { f: 2600, f2: 1900, dur: 0.14, type: 'triangle', vol: 0.12 }); impact(0, 0.25); },          // 쨍
+    thud: () => { impact(0, 0.5); noise('game', { filter: 'lowpass', f: 500, dur: 0.1, vol: 0.3 }); },                                                                                       // 퍽
+    holy: () => { [1568, 2093, 2637].forEach((f, i) => tone('game', { f, dur: 0.4, type: 'triangle', vol: 0.09, at: i * 0.035 })); impact(0, 0.22); },                                     // 띠링
+    burn: () => { noise('game', { filter: 'highpass', f: 2000, f2: 7000, dur: 0.32, vol: 0.28 }); tone('game', { f: 300, f2: 90, dur: 0.2, type: 'sawtooth', vol: 0.08 }); impact(0, 0.2); },  // 치익
+    slash: () => { noise('game', { f: 4200, f2: 1200, dur: 0.13, vol: 0.45, q: 3 }); tone('game', { f: 1100, f2: 320, dur: 0.1, type: 'sawtooth', vol: 0.08 }); impact(0.03, 0.25); },        // 서걱
+    bite: () => { noise('game', { filter: 'lowpass', f: 900, f2: 240, dur: 0.2, vol: 0.45 }); tone('game', { f: 420, f2: 150, dur: 0.18, vol: 0.2, at: 0.04 }); tone('game', { f: 700, f2: 1100, dur: 0.12, vol: 0.07, at: 0.16 }); }, // 츄릅
+    zap: () => { for (let i = 0; i < 7; i++) noise('game', { filter: 'highpass', f: 2500 + Math.random() * 3500, dur: 0.03, vol: 0.32, at: i * 0.03 }); tone('game', { f: 110, dur: 0.22, type: 'sawtooth', vol: 0.12 }); }, // 지지직
+    magic: () => { [1319, 1760, 2349].forEach((f, i) => tone('game', { f, dur: 0.22, vol: 0.1, at: i * 0.045 })); noise('game', { filter: 'highpass', f: 5000, dur: 0.15, vol: 0.12 }); impact(0, 0.18); }, // 뾰로롱
+    boom: () => { boom('game', 0, 0.8, 0.6); noise('game', { filter: 'highpass', f: 1500, dur: 0.1, vol: 0.3 }); },                                                                           // 콰광
+    quake: () => { boom('game', 0, 0.55, 0.4); tone('game', { f: 60, f2: 35, dur: 0.35, vol: 0.4 }); },                                                                                       // 쿠웅
+    wind: () => { noise('game', { f: 700, f2: 2600, dur: 0.26, vol: 0.32, q: 2 }); impact(0.06, 0.25); },                                                                                     // 휘익 퍽
+    wave: () => { noise('game', { filter: 'lowpass', f: 1600, f2: 200, dur: 0.32, vol: 0.45 }); impact(0, 0.3); },                                                                             // 쿠왕
+  };
+
   /** 캐릭터별 피격 목소리 */
   const HURT = [
     () => { tone('game', { f: 950, f2: 520, dur: 0.12, type: 'square', vol: 0.12 }); tone('game', { f: 760, f2: 420, dur: 0.1, type: 'square', vol: 0.1, at: 0.1 }); },  // 🦊 깽!
@@ -168,10 +184,11 @@
       if (level.game <= 0 || !ready()) return;
       (ATTACK[style] || ATTACK.sniper)(pf(id));
     },
-    /** 캐릭터별 피격 소리 (맞는 '퍽' + 그 동물의 목소리) */
-    hurt(id) {
+    /** 피격 소리: 무기에 따른 타격음 (kind: 쨍·퍽·지직·콰광…) + 그 말의 목소리 */
+    hurt(id, kind) {
       if (level.game <= 0 || !ready() || throttled('hurt' + id, 60)) return;
-      impact();
+      if (IMPACT[kind] && !throttled('imp-' + kind, 45)) IMPACT[kind]();
+      else if (!IMPACT[kind]) impact();
       (HURT[id] || HURT[0])();
     },
     /** 이동: 발소리 세 번 (말마다 발소리 높이가 다르다) */

@@ -730,11 +730,148 @@
     setTimeout(() => c.remove(), 700);
   }
 
-  /** 폴리라인 경로를 따라 탄환을 날린다. events: [{ d: 이동거리, fn }] 은 탄환이 d 지점을 지날 때 실행 */
-  function animatePath(pts, color, speed = 11, events = []) {
+  // ---------------- 직업별 탄환·타격 모양 ----------------
+  // head: 날아가는 탄 · trail: 남는 궤적 · tint: 탄 색(없으면 플레이어 색) · hit: 맞았을 때 이펙트(소리도 같은 이름) · speed: 칸/초
+  const LOOKS = {
+    sniper:    { head: 'tracer', trail: 'thin', tint: '#fff6c0', speed: 24, hit: 'spark' },
+    shotgun:   { head: 'pellet', trail: 'none', tint: '#ffd27a', speed: 16, hit: 'spark' },
+    ricochet:  { head: 'pebble', trail: 'dash', speed: 11, hit: 'thud' },
+    bishop:    { head: 'cross', trail: 'glow', tint: '#fff4b0', speed: 13, hit: 'holy' },
+    rook:      { head: 'plus', trail: 'glow', tint: '#fff4b0', speed: 13, hit: 'holy' },
+    queen:     { head: 'star', trail: 'glow', tint: '#ffe38a', speed: 13, hit: 'holy' },
+    scatter:   { head: 'tracer', trail: 'none', tint: '#ffe14d', speed: 20, hit: 'spark' },
+    laser:     { head: 'none', trail: 'beam', speed: 45, hit: 'burn' },
+    spear:     { head: 'spear', trail: 'none', speed: 14, hit: 'slash' },
+    vampire:   { head: 'fang', trail: 'blood', tint: '#ff3b5c', speed: 13, hit: 'bite' },
+    chain:     { head: 'none', trail: 'bolt', tint: '#fff27a', speed: 40, hit: 'zap' },
+    boomerang: { head: 'boomerang', trail: 'none', speed: 10, hit: 'thud' },
+    grapple:   { head: 'hook', trail: 'rope', speed: 14, hit: 'thud' },
+    homing:    { head: 'orb', trail: 'glow', tint: '#9ef0ff', speed: 9, hit: 'magic' },
+    knight:    { head: 'dot', trail: 'dash', speed: 14, hit: 'quake' },
+  };
+  // 칸을 치는 공격의 타격 모양
+  const CELL_HIT = { mortar: 'boom', king: 'quake', whirl: 'wind', shockwave: 'wave', knight: 'quake' };
+  const lookOf = style => LOOKS[style] || { head: 'dot', trail: 'line', speed: 12, hit: CELL_HIT[style] || 'thud' };
+
+  const starPath = (R, r, n = 5) => {
+    let d = '';
+    for (let i = 0; i < n * 2; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / n, k = i % 2 ? r : R;
+      d += (i ? 'L' : 'M') + (Math.cos(a) * k).toFixed(3) + ' ' + (Math.sin(a) * k).toFixed(3);
+    }
+    return d + 'Z';
+  };
+
+  /** 날아가는 탄 모양 (원점이 탄 머리, +x 가 날아가는 방향) */
+  function makeHead(kind, color) {
+    if (kind === 'none') return null;
+    const g = svg('g', { class: 'head' });
+    const add = (tag, a) => svg(tag, a, g);
+    const stroke = (d, col, w) => add('path', { d, fill: 'none', stroke: col, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    switch (kind) {
+      case 'tracer': stroke('M-.75 0 L0 0', color, 0.07); add('circle', { r: 0.07, fill: '#fff' }); break;
+      case 'pellet': add('circle', { r: 0.09, fill: color, stroke: '#fff', 'stroke-width': 0.02 }); break;
+      case 'pebble': add('circle', { r: 0.13, fill: '#9aa0ad', stroke: '#151827', 'stroke-width': 0.04 }); break;
+      case 'shell': add('ellipse', { rx: 0.17, ry: 0.12, fill: '#3a3e4f', stroke: '#ffb35c', 'stroke-width': 0.03 }); break;
+      case 'cross': stroke('M-.18 -.18 L.18 .18 M.18 -.18 L-.18 .18', color, 0.09); add('circle', { r: 0.06, fill: '#fff' }); break;
+      case 'plus': stroke('M-.22 0 L.22 0 M0 -.22 L0 .22', color, 0.09); add('circle', { r: 0.06, fill: '#fff' }); break;
+      case 'star': add('path', { d: starPath(0.24, 0.1), fill: color, stroke: '#fff', 'stroke-width': 0.025 }); break;
+      case 'spear':
+        stroke('M-.95 0 L-.1 0', '#151827', 0.1); stroke('M-.95 0 L-.1 0', '#b07a3e', 0.05);
+        add('path', { d: 'M-.16 -.11 L.16 0 L-.16 .11 L-.1 0 Z', fill: '#e6ebf5', stroke: '#151827', 'stroke-width': 0.025 });
+        break;
+      case 'fang': add('circle', { r: 0.16, fill: color, opacity: 0.9 }); add('path', { d: 'M-.09 -.05 L-.045 .1 L0 -.05 Z M0 -.05 L.045 .1 L.09 -.05 Z', fill: '#fff' }); break;
+      case 'boomerang': stroke('M-.17 -.19 L.1 0 L-.17 .19', '#151827', 0.14); stroke('M-.17 -.19 L.1 0 L-.17 .19', '#d9964a', 0.08); break;
+      case 'hook':
+        stroke('M-.18 0 L.12 0 M.02 -.15 Q.26 0 .02 .15', '#151827', 0.1);
+        stroke('M-.18 0 L.12 0 M.02 -.15 Q.26 0 .02 .15', '#c7ceda', 0.045);
+        break;
+      case 'orb': add('circle', { r: 0.22, fill: color, opacity: 0.35 }); add('circle', { r: 0.11, fill: '#e8fdff', stroke: color, 'stroke-width': 0.04 }); break;
+      default: add('circle', { class: 'bullet', r: 0.15, fill: color });
+    }
+    return g;
+  }
+  // 빙글빙글 도는 탄 (칸당 회전 각도)
+  const SPIN = { boomerang: 600, star: 220, cross: 180, plus: 180, pebble: 0 };
+
+  /** 번개: 경로를 잘게 나눠 옆으로 흔든다 (매 프레임 새로 → 지직거림) */
+  function jagged(pts) {
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round(L / 0.35));
+      const nx = -(y1 - y0) / (L || 1), ny = (x1 - x0) / (L || 1);
+      for (let k = 1; k <= n; k++) {
+        const f = k / n, j = k === n ? 0 : (Math.random() - 0.5) * 0.3;
+        out.push([x0 + (x1 - x0) * f + nx * j, y0 + (y1 - y0) * f + ny * j]);
+      }
+    }
+    return out;
+  }
+
+  /** 맞은 자리 이펙트. rot: 공격이 들어온 방향(라디안) */
+  function impactFx(x, y, kind, color = '#fff', rot = 0, parent = el.fx) {
+    const g = svg('g', { class: 'imp imp-' + kind, transform: `translate(${x} ${y}) rotate(${(rot * 180 / Math.PI).toFixed(1)})` }, parent);
+    const inner = svg('g', { class: 'imp-in' }, g);
+    const add = (tag, a) => svg(tag, a, inner);
+    const stroke = (d, col, w, extra = {}) => add('path', Object.assign({ d, fill: 'none', stroke: col, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, extra));
+    const rays = (n, r1, r2, col, w, a0 = 0) => {
+      let d = '';
+      for (let i = 0; i < n; i++) {
+        const a = a0 + i * 2 * Math.PI / n;
+        d += `M${(Math.cos(a) * r1).toFixed(3)} ${(Math.sin(a) * r1).toFixed(3)} L${(Math.cos(a) * r2).toFixed(3)} ${(Math.sin(a) * r2).toFixed(3)} `;
+      }
+      stroke(d, col, w);
+    };
+    switch (kind) {
+      case 'spark': rays(8, 0.12, 0.44, '#ffe14d', 0.06, Math.random()); add('circle', { r: 0.13, fill: '#fff' }); break;
+      case 'thud': add('circle', { r: 0.3, fill: 'none', stroke: '#f1eadb', 'stroke-width': 0.06 }); rays(6, 0.2, 0.38, '#fff', 0.05, 0.3); break;
+      case 'holy': add('circle', { r: 0.34, fill: 'none', stroke: '#fff4b0', 'stroke-width': 0.06 }); stroke('M0 -.32 L0 .32 M-.32 0 L.32 0', '#fff', 0.07); break;
+      case 'burn': add('circle', { r: 0.34, fill: color, opacity: 0.55 }); add('circle', { r: 0.16, fill: '#fff' }); rays(6, 0.3, 0.46, '#ffb35c', 0.05); break;
+      case 'slash': stroke('M-.4 .3 Q0 0 .4 -.34', '#fff', 0.08); stroke('M-.3 .4 Q.06 .12 .32 -.2', color, 0.045); break;
+      case 'bite': stroke('M-.26 -.3 L-.12 .3 M0 -.34 L0 .3 M.26 -.3 L.12 .3', '#ff3b5c', 0.08); add('circle', { r: 0.1, fill: '#ff8fa3', opacity: 0.8 }); break;
+      case 'zap': stroke('M-.36 -.2 L-.1 -.05 L-.22 .1 L.1 .2 L0 .38 M.36 -.32 L.12 -.12 L.28 0', '#fff27a', 0.06); add('circle', { r: 0.14, fill: '#fffbd0' }); break;
+      case 'magic': add('path', { d: starPath(0.38, 0.13, 4), fill: color, opacity: 0.9 }); add('circle', { r: 0.08, fill: '#fff' }); break;
+      case 'boom': add('circle', { r: 0.52, fill: '#ff9f43', opacity: 0.75 }); add('circle', { r: 0.28, fill: '#ffe07a' }); rays(10, 0.48, 0.72, '#ffb35c', 0.07, Math.random()); break;
+      case 'quake': add('circle', { r: 0.46, fill: 'none', stroke: '#ffe07a', 'stroke-width': 0.08 }); rays(8, 0.18, 0.36, '#fff4b0', 0.05); break;
+      case 'wind': stroke('M-.36 0 A.36 .36 0 1 1 0 .36 M-.2 0 A.2 .2 0 1 1 0 .2', '#bff3ff', 0.06); break;
+      case 'wave': stroke('M-.12 -.42 Q.24 0 -.12 .42 M.12 -.32 Q.42 0 .12 .32', '#dff6ff', 0.07); break;
+      default: add('circle', { r: 0.3, fill: 'none', stroke: color, 'stroke-width': 0.08 });
+    }
+    setTimeout(() => g.remove(), 750);
+  }
+
+  /** 맞은 말 앞에 튀어나오는 타격 이펙트 (판 바닥 이펙트는 서 있는 캐릭터에 가려지므로) */
+  function impactOn(q, kind, color, rot = 0) {
+    const stand = el.pieces.querySelector(`[data-id="${q.id}"] .stand`);
+    if (!stand) return;
+    const box = document.createElementNS(SVGNS, 'svg');
+    box.setAttribute('viewBox', '-1 -1 2 2');
+    box.setAttribute('class', 'fx imp-pop');
+    stand.appendChild(box);
+    impactFx(0, 0, kind, color, rot + (S.ang || 0) * Math.PI / 180, box);
+    setTimeout(() => box.remove(), 800);
+  }
+
+  /** 판 흔들기 (1: 약하게, 2: 세게) */
+  function shakeBoard(power = 1) {
+    if (!el.board || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    el.board.classList.remove('shake-1', 'shake-2');
+    void el.board.offsetWidth;
+    el.board.classList.add('shake-' + power);
+    clearTimeout(shakeBoard.t);
+    shakeBoard.t = setTimeout(() => el.board.classList.remove('shake-1', 'shake-2'), 500);
+  }
+
+  /** 폴리라인 경로를 따라 탄환을 날린다. events: [{ d: 이동거리, fn }] 은 탄환이 d 지점을 지날 때 실행. look: 직업별 탄 모양 */
+  function animatePath(pts, color, speed = 11, events = [], look = null) {
+    look = look || { head: 'dot', trail: 'line' };
+    if (look.speed) speed = look.speed;
+    const tint = look.tint || color;
     return new Promise(resolve => {
-      const line = svg('polyline', { class: 'shot', stroke: color, points: '' });
-      const ball = svg('circle', { class: 'bullet', r: 0.15, fill: color });
+      const line = svg('polyline', { class: 'shot t-' + (look.trail || 'line'), stroke: look.trail === 'rope' ? '#c9a26a' : tint, points: '' });
+      const core = look.trail === 'beam' ? svg('polyline', { class: 'shot t-core', stroke: '#fff', points: '' }) : null;
+      const ball = makeHead(look.head, tint);
+      const spin = SPIN[look.head] || 0;
       const lens = [];
       let total = 0;
       for (let i = 0; i < pts.length - 1; i++) {
@@ -763,16 +900,24 @@
         }
         // 반사 지점 통과 시 스파크
         while (passed < seg && passed < pts.length - 2) { passed++; burst(pts[passed][0], pts[passed][1], '#fff'); }
-        line.setAttribute('points', out.map(q => q.join(',')).join(' '));
-        ball.setAttribute('cx', head[0]);
-        ball.setAttribute('cy', head[1]);
+        const shown = look.trail === 'bolt' ? jagged(out) : out;
+        const ptsAttr = shown.map(q => q.join(',')).join(' ');
+        line.setAttribute('points', ptsAttr);
+        if (core) core.setAttribute('points', ptsAttr);
+        if (ball) {
+          const s = Math.min(seg, pts.length - 2), a = Math.atan2(pts[s + 1][1] - pts[s][1], pts[s + 1][0] - pts[s][0]) * 180 / Math.PI;
+          ball.setAttribute('transform', `translate(${head[0]} ${head[1]}) rotate(${(spin ? d * spin : a).toFixed(1)}) scale(1.4)`);
+        }
         for (const e of events) if (!e.done && e.d <= d) { e.done = true; e.fn(); }
         if (d < total) requestAnimationFrame(frame);
         else {
           // 끝점에서 부동소수 오차로 남은 적중이 있으면 마저 처리
           for (const e of events) if (!e.done) { e.done = true; e.fn(); }
-          ball.remove();
-          setTimeout(() => { line.classList.add('fade'); setTimeout(() => line.remove(), 650); }, 250);
+          if (ball) ball.remove();
+          setTimeout(() => {
+            line.classList.add('fade'); if (core) core.classList.add('fade');
+            setTimeout(() => { line.remove(); if (core) core.remove(); }, 650);
+          }, look.trail === 'beam' || look.trail === 'bolt' ? 120 : 250);
           resolve();
         }
       };
@@ -1574,7 +1719,7 @@
     if (src && src !== t) src.dealt = (src.dealt || 0) + (before - t.hp);
     floatText(t, `-${amt}`, 'dmg');
     hitFx(t);
-    if (window.Sfx) Sfx.hurt(t.id);
+    if (window.Sfx) Sfx.hurt(t.id, S.hitKind);
     const self = src === t;
     log(`${self ? '🤕' : '💢'} ${tag(t)} ${why}으로 ${amt} 피해${self ? ' (자폭!)' : ''} → HP ${t.hp}`);
     if (t.hp <= 0) {
@@ -1810,7 +1955,7 @@
       p.power = false;
       log(`${tag(p)} 💥 강화탄 발동! 첫 타격 피해 ${POWER_MULT}배`);
     }
-    const hitDmg = (mult = 1) => { const v = Math.round(dmg * mult * boost); boost = 1; return v; };
+    const hitDmg = (mult = 1) => { const v = Math.round(dmg * mult * boost); if (boost > 1) shakeBoard(2); boost = 1; return v; };
     let tgt = target;
     let tgts = tgt ? [tgt] : [];
     if (p.style === 'scatter') {
@@ -1838,7 +1983,7 @@
       const ok = tgt && KNIGHT_JUMPS.some(([dx, dy]) => p.x + dx === tgt[0] && p.y + dy === tgt[1]) && inB(tgt[0], tgt[1]) && !at(tgt[0], tgt[1]);
       if (ok) {
         sfx('jump');
-        await animatePath([[p.x + 0.5, p.y + 0.5], [(p.x + tgt[0]) / 2 + 0.5, (p.y + tgt[1]) / 2 + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], p.color, 14);
+        await animatePath([[p.x + 0.5, p.y + 0.5], [(p.x + tgt[0]) / 2 + 0.5, (p.y + tgt[1]) / 2 + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], p.color, 14, [], LOOKS.knight);
         sfx('land');
         burst(p.x + 0.5, p.y + 0.5, p.color);
         [p.x, p.y] = tgt;
@@ -1853,26 +1998,39 @@
     const plan = planAttack(p, p.style, p.style === 'knight' ? [p.x, p.y] : p.style === 'scatter' ? tgts : tgt);
     let hitCount = 0;
     p.atk = (p.atk || 0) + 1;
+    const look = lookOf(p.style);
+    S.hitKind = look.hit;
     await Promise.all(plan.rays.map(r => sleep(r.delay || 0).then(() => animatePath(r.pts, p.color, 12, r.hits.map(h => ({
       d: h.d,
       fn: () => {
         hitCount++;
-        burst(h.at[0], h.at[1], '#ff5d6c');
+        impactOn(h.q, look.hit, look.tint || p.color, Math.atan2(h.q.y - p.y, h.q.x - p.x));
         const mult = p.style === 'ricochet' ? 1 + RICO_BONUS * h.bounces : 1;
         const dealt = damage(h.q, hitDmg(mult), p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회${p.style === 'ricochet' ? ` +${Math.round(RICO_BONUS * 100 * h.bounces)}%` : ''})` : ''}`);
         if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 3));
       },
-    }))))));
+    })), look))));
     if (plan.cells.length) {
-      if (p.style === 'mortar') await animatePath([[p.x + 0.5, p.y + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], '#ff9f43', 10);
-      for (const [x, y] of plan.cells) burst(x + 0.5, y + 0.5, p.style === 'mortar' ? '#ff9f43' : p.style === 'whirl' ? '#9be7ff' : p.color);
+      if (p.style === 'mortar') {
+        // 포탄은 포물선으로 (옆으로 휘어 보이게)
+        const [x0, y0, x1, y1] = [p.x + 0.5, p.y + 0.5, tgt[0] + 0.5, tgt[1] + 0.5], L = Math.hypot(x1 - x0, y1 - y0) || 1;
+        const arc = [];
+        for (let i = 0; i <= 14; i++) { const f = i / 14, h = Math.sin(Math.PI * f) * L * 0.35; arc.push([x0 + (x1 - x0) * f + (y1 - y0) / L * h, y0 + (y1 - y0) * f - (x1 - x0) / L * h]); }
+        await animatePath(arc, '#ff9f43', 10, [], { head: 'shell', trail: 'dash', tint: '#ff9f43', speed: 9 });
+      }
+      const kind = CELL_HIT[p.style] || look.hit;
+      S.hitKind = kind;
+      for (const [x, y] of plan.cells) impactFx(x + 0.5, y + 0.5, kind, p.style === 'mortar' ? '#ff9f43' : p.color, Math.atan2(y - p.y, x - p.x));
+      if (p.style === 'mortar' || p.style === 'king') shakeBoard(2);
+      else if (p.style === 'knight' || p.style === 'shockwave') shakeBoard(1);
       if (p.style === 'knight') { toast(`${s.icon} 착지!`, 900); if (window.Sfx) Sfx.attack('king', p.id); }
       await sleep(250);
       for (const [x, y, w] of plan.cells) {
         const q = at(x, y);
-        if (q) { hitCount++; damage(q, hitDmg(w), p, s.name); }
+        if (q) { hitCount++; if (q !== p) impactOn(q, kind, p.color, Math.atan2(y - p.y, x - p.x)); damage(q, hitDmg(w), p, s.name); }
       }
     }
+    S.hitKind = null;
     // 갈고리: 맞은 적을 내 앞 칸으로 · 충격파: 맞은 적을 1칸 밀쳐냄
     if (p.style === 'grapple') {
       const h = plan.rays[0] && plan.rays[0].hits[0];
@@ -3003,7 +3161,7 @@
         return out;
       },
       /** 테스트용: i 번 말이 지금 실제로 공격 (심화, 빠른 정답 아님) */
-      async attack(i, power = false) { const p = S.players[i]; p.power = power; await doAttack(p, 'hard', false, null); return S.players.map(q => ({ name: q.name, hp: q.hp, x: q.x, y: q.y })); },
+      async attack(i, power = false, target = null) { const p = S.players[i]; p.power = power; await doAttack(p, 'hard', false, target); return S.players.map(q => ({ name: q.name, hp: q.hp, x: q.x, y: q.y })); },
       state() {
         return { phase: S.phase, round: S.round,
           players: S.players.map(p => ({ style: p.style, hp: p.hp, alive: p.alive, dealt: p.dealt || 0, atk: p.atk || 0, landed: p.landed || 0 })) };
