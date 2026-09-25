@@ -429,8 +429,16 @@
   function updateMusic() {
     if (!window.Music || S.phase === 'over') return;
     if (S.phase === 'setup' || !S.players.length) { Music.play(null); return; }
-    const p = (brawl() && S.online && S.players[S.online.mySeat]) || cur();
-    Music.play(p && p.alive && p.hp <= S.maxHp * PINCH_HP ? 'pinch' : 'battle');
+    // '내' 체력 기준 (차례가 바뀌어도 곡이 왔다 갔다 하지 않게)
+    //  온라인: 내 자리 · 한 기기: 사람 플레이어들 중 누구든 위험하면 (AI 는 제외, 전원 AI 면 전원 기준)
+    const low = q => q && q.alive && q.hp <= S.maxHp * PINCH_HP;
+    let danger;
+    if (S.online) danger = low(S.players[S.online.mySeat]);
+    else {
+      const humans = S.players.filter(q => !q.bot);
+      danger = (humans.length ? humans : S.players).some(low);
+    }
+    Music.play(danger ? 'pinch' : 'battle');
   }
 
   // ---------------- 소리 설정: 음악 · 시스템 · 게임 (각각 음량 + 음소거, 전체 음소거) ----------------
