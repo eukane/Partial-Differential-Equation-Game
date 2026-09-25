@@ -9,12 +9,12 @@
   },
   "victory": {},
   "swing-battle": {
-    "loopStart": 36.36363636363637,
-    "loopEnd": 65.45454545454545
+    "loopStart": 13.714285714285714,
+    "loopEnd": 61.714285714285715
   },
   "swing-pinch": {
-    "loopStart": 25.263157894736842,
-    "loopEnd": 50.526315789473685
+    "loopStart": 1.4634146341463414,
+    "loopEnd": 24.878048780487806
   },
   "swing-victory": {}
 }

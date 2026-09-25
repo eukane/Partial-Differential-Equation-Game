@@ -13,14 +13,14 @@
   const VOL = 0.5;
   const FADE = 1.0;
   const BASE = 'audio/';
-  const VER = '?v=20260925-10';
+  const VER = '?v=20260925-11';
   // tools/music/out/loops.json 과 같은 값 (초)
   const LOOPS = {
     'battle': { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },
     'pinch': { loopStart: 20.869565217391305, loopEnd: 41.73913043478261 },
     'victory': null,
-    'swing-battle': { loopStart: 36.36363636363637, loopEnd: 65.45454545454545 },
-    'swing-pinch': { loopStart: 25.263157894736842, loopEnd: 50.526315789473685 },
+    'swing-battle': { loopStart: 13.714285714285714, loopEnd: 61.714285714285715 },
+    'swing-pinch': { loopStart: 1.4634146341463414, loopEnd: 24.878048780487806 },
     'swing-victory': null,
   };
 
