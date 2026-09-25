@@ -851,6 +851,7 @@
     }
     S.pos = pos; S.round = round; S.turn = id;
     S.players[id].aimBase = S.players[id].ang;   // 저격 조준 제한의 기준 (이번 턴 시작 방향)
+    S.awayNoted = false;
     await sleep(350);
     if (S.online) startOnlineTurn();
     else showHandover();
@@ -1128,10 +1129,15 @@
     S.botTimer = setTimeout(() => botTurn(token), 900);
   }
 
-  async function botTurn(token) {
+  /** force: 사람 자리지만 자리를 비워서 AI 가 대신 두는 경우 */
+  async function botTurn(token, force = false) {
     const p = cur();
-    if (token !== S.botToken || !p || !p.bot || !p.alive || S.phase !== 'choose' || !botAuthority() || brawl()) return;
-    if (S.applying) { S.botTimer = setTimeout(() => botTurn(token), 300); return; }
+    if (token !== S.botToken || !p || !(p.bot || force) || !p.alive || S.phase !== 'choose' || !botAuthority() || brawl()) return;
+    if (S.applying) { S.botTimer = setTimeout(() => botTurn(token, force), 300); return; }
+    S.botBusy = true;
+    try { await botTurnInner(p, token); } finally { S.botBusy = false; }
+  }
+  async function botTurnInner(p, token) {
     const act = botDecide(p);
     if (act.key !== 'pick') {
       const info = actionInfo(act.key, p);
@@ -1152,7 +1158,7 @@
     if (!S.online || !S.online.host || !brawl()) return;
     S.botClock = {};
     S.brawlBotTimer = setInterval(() => {
-      if (!S.online || !brawl() || S.phase === 'over' || S.online.phase !== 'game') { clearInterval(S.brawlBotTimer); return; }
+      if (!S.online || !S.online.host || !brawl() || S.phase === 'over' || S.online.phase !== 'game') { clearInterval(S.brawlBotTimer); return; }
       const now = Date.now();
       S.players.forEach((p, seat) => {
         if (!p.bot || !p.alive) return;
@@ -2233,6 +2239,10 @@
     byId: null,      // 플랫폼이 보증하는 사용자 id (있으면 우선)
     nick: '',
     hostMissingSince: 0,
+    seen: {},          // 사람별 마지막 심장박동: { key: { hb, at } } (받은 시각 기준이라 기기 시계가 달라도 된다)
+    hostDownSince: 0,  // 방장이 응답 없기 시작한 때 (참가자)
+    awaySince: {},     // 자리 비운 사람의 차례가 시작된 때 (방장)
+    hostEpoch: 0,      // 방장이 바뀐 횟수 (클수록 새 방장)
 
     async init() {
       const note = $('#onlineNote');
@@ -2273,6 +2283,110 @@
         b.onclick = () => this.restore(h);
       }
       if (hash) $('#nick').focus();
+      // 1.5초마다: 심장박동 보내기, 방장 이어받기, 자리 비운 사람 차례 대신 두기
+      setInterval(() => this.tick(), 1500);
+      document.addEventListener('visibilitychange', () => {
+        if (!this.room || !S.online) return;
+        this.room.presence({ away: document.hidden ? 1 : 0, hb: Date.now() }).catch(() => {});
+        if (!document.hidden) this.tick();
+      });
+    },
+
+    // ---------- 자리 비움 · 방장 이어받기 ----------
+    tick() {
+      const o = S.online;
+      if (!o || !this.room) return;
+      const now = Date.now();
+      this.beat = (this.beat || 0) + 1;
+      if (this.beat % 2 === 0) this.room.presence({ hb: now, away: document.hidden ? 1 : 0 }).catch(() => {});
+      this.trackPeers();
+      if (o.phase !== 'game') return;
+      if (o.host) this.coverAway(now);
+      else this.watchHost(now);
+    },
+    trackPeers() {
+      const now = Date.now();
+      for (const p of this.peersInRoom()) {
+        const k = this.keyOf(p), hb = p.presence.hb;
+        if (!this.seen[k] || this.seen[k].hb !== hb) this.seen[k] = { hb, at: now };
+      }
+    },
+    /** 이 사람이 지금 화면을 보고 있나 (최근 10초 안에 심장박동, 화면 숨김 아님) */
+    peerActive(p) {
+      if (!p || p.presence.away) return false;
+      const s = this.seen[this.keyOf(p)];
+      return !!s && Date.now() - s.at < 10000;
+    },
+    seatActive(i) {
+      const o = S.online, seat = o && o.seats[i];
+      if (!seat) return false;
+      if (seat.b) return true;
+      if (i === o.mySeat) return !document.hidden;
+      return this.peerActive(this.peerOfSeat(i));
+    },
+    seatIndexOf(p) { return S.online ? S.online.seats.findIndex(x => x.k === this.keyOf(p)) : -1; },
+    /** 참가자: 방장이 6초 넘게 응답이 없으면, 자리 순서로 첫 번째 활동 중인 사람이 방장을 이어받는다 */
+    watchHost(now) {
+      const o = S.online;
+      const hp = this.hostPeer();
+      if (hp && this.peerActive(hp)) { this.hostDownSince = 0; return; }
+      if (!this.hostDownSince) { this.hostDownSince = now; return; }
+      if (now - this.hostDownSince < 6000 || S.applying || o.pending || o.mySeat < 0) return;
+      const hostSeat = hp ? this.seatIndexOf(hp) : -1;
+      const next = o.seats.findIndex((x, i) => i !== hostSeat && !x.b && this.seatActive(i));
+      if (next === o.mySeat) this.takeOver();
+    },
+    takeOver() {
+      const o = S.online;
+      o.host = true;
+      o.epoch = (this.hostEpoch || 0) + 1;
+      this.hostEpoch = o.epoch;
+      o.hist = []; o.acts = []; o.act = null; o.base = snapshot();
+      this.queue = []; this.handled = {}; this.awaySince = {};
+      this.hostDownSince = 0;
+      this.publish();
+      log('👑 방장이 자리를 비워서 이 기기가 방장을 이어받았어요.');
+      toast('👑 방장이 자리를 비워서 이 기기가 방장을 이어받았어요', 3500);
+      // 방장에게 보내 두었던 내 행동이 있으면 이어서 처리
+      const r = this.myReq;
+      this.myReq = null;
+      if (r && !brawl() && r.seq === o.seq + 1) this.accept(r);
+      else if (r && brawl() && S.myBusy) { this.queue.push({ ...r, actor: o.mySeat }); this.pump(); }
+      // 옛 방장에게 보내 놓고 기다리던 다른 사람들의 요청도 바로 확인
+      this.lastSig = '';
+      this.hostScan();
+      if (brawl()) startBrawlBots(); else scheduleBot();
+      renderAll();
+    },
+    /** 더 새로운 방장이 있으면 나는 참가자로 돌아간다 (자리 비웠다 돌아온 옛 방장) */
+    maybeDemote() {
+      const o = S.online;
+      const other = this.hostPeer();
+      if (!other) return false;
+      const ep = other.presence.ep | 0, mine = o.epoch | 0;
+      if (ep < mine || (ep === mine && this.seatIndexOf(other) > o.mySeat)) return false;
+      o.host = false;
+      o.seq = -1;          // 새 방장의 상태를 통째로 받아 온다
+      o.pending = null;
+      this.hostEpoch = ep;
+      this.queue = []; this.handled = {};
+      clearInterval(S.brawlBotTimer);
+      store.del(HOST_SAVE);
+      this.room.presence({ role: 'guest', join: 1, seats: null, base: null, acts: null, act: null, ph: null, seq: null, ep: null, req: null }).catch(() => {});
+      log('👑 다른 사람이 방장을 이어받아서, 이 기기는 참가자로 돌아왔어요.');
+      toast('다른 사람이 방장을 이어받았어요. 이어서 같이 해요!', 3000);
+      this.guestSync();
+      return true;
+    },
+    /** 방장: 턴제에서 자리 비운 사람의 차례가 15초 넘게 멈춰 있으면 AI 가 대신 둔다 */
+    coverAway(now) {
+      if (brawl() || S.phase !== 'choose' || S.applying) return;
+      const p = cur();
+      if (!p || !p.alive || p.bot || p.id === S.online.mySeat || this.seatActive(p.id)) { if (p) this.awaySince[p.id] = 0; return; }
+      if (!this.awaySince[p.id]) { this.awaySince[p.id] = now; return; }
+      if (now - this.awaySince[p.id] < 15000 || S.botBusy) return;
+      if (!S.awayNoted) { S.awayNoted = true; log(`🤖 ${tag(p)} 자리 비움 → AI 가 대신 둡니다`); toast(`🤖 ${p.emoji} ${p.name} 자리 비움 · AI 가 대신 둬요`, 2500); }
+      botTurn(S.botToken = (S.botToken || 0) + 1, true);
     },
 
     myKey() { return this.byId || this.uid; },
@@ -2302,7 +2416,11 @@
       if (!this.room || !S.online) return [];
       return this.room.peers().filter(p => p.presence && p.presence.app === APP && p.presence.room === S.online.code && !p.sameTab);
     },
-    hostPeer() { return this.peersInRoom().find(p => p.presence.role === 'host') || null; },
+    hostPeer() {
+      const hs = this.peersInRoom().filter(p => p.presence.role === 'host');
+      if (hs.length <= 1) return hs[0] || null;
+      return hs.sort((a, b) => (b.presence.ep | 0) - (a.presence.ep | 0) || (b.presence.seq | 0) - (a.presence.seq | 0) || this.seatIndexOf(a) - this.seatIndexOf(b))[0];
+    },
     peerOfSeat(i) {
       const seat = S.online && S.online.seats[i];
       if (!seat) return null;
@@ -2392,7 +2510,7 @@
       const o = S.online;
       this.room.presence({
         app: APP, room: o.code, role: 'host', uid: this.uid, nick: this.nick,
-        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, req: null,
+        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, req: null, ep: o.epoch | 0,
       }).catch(() => toast('방 정보를 보내지 못했어요', 2500));
       store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
     },
@@ -2487,6 +2605,7 @@
       }
       this.hostMissingSince = 0;
       const h = hp.presence;
+      this.hostEpoch = h.ep | 0;
       o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, MAX_PLAYERS).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어', b: x && x.b ? 1 : 0 }));
       o.mySeat = o.seats.findIndex(x => x.k === this.myKey());
       o.timer = !!h.tm;
@@ -2541,6 +2660,7 @@
       if (brawl()) { this.brawlSubmit(a); return; }
       if (o.host) { this.accept(a); return; }
       const req = { ...a, seq: o.seq + 1, n: Date.now() % 1e9 };
+      this.myReq = req;
       S.phase = 'busy';
       renderAll();
       this.room.presence({ req }).catch(() => {});
@@ -2574,6 +2694,7 @@
         return;
       }
       const req = { ...a, actor: o.mySeat, n };
+      this.myReq = req;
       this.room.presence({ req }).catch(() => {});
       // 방장이 못 받았으면 같은 요청을 다시 보낸다 (방장은 같은 번호를 한 번만 처리)
       let tries = 0;
@@ -2605,6 +2726,11 @@
     onPeers() {
       const o = S.online;
       if (!o) return;
+      // 심장박동(hb)만 바뀐 알림이면 화면을 다시 그리지 않는다 (버튼이 계속 새로 그려져 눌리지 않는 문제 방지)
+      this.trackPeers();
+      const sig = JSON.stringify(this.peersInRoom().map(p => { const { hb, ...rest } = p.presence; return [this.keyOf(p), rest]; }));
+      if (sig === this.lastSig) return;
+      this.lastSig = sig;
       if (o.host) {
         if (o.phase === 'lobby') {
           let changed = false;
@@ -2629,6 +2755,8 @@
           if (changed) this.publish();
           renderLobby();
         } else {
+          this.trackPeers();
+          if (this.maybeDemote()) return;
           this.hostScan();
           if (!S.applying) { renderPlayers(); renderTurn(); this.followAim(); }
         }
