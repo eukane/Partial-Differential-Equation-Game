@@ -904,26 +904,36 @@
   //  증강 (공격 스타일) — 각 플레이어가 첫 차례에 무작위 3개 중 하나를 고른다
   // ------------------------------------------------------------------
   const STYLES = {
-    sniper:   { icon: '🎯', name: '저격', desc: '조준 방향으로 직선 발사. 처음 맞는 적에게 피해', aim: true, dmg: { easy: 30, hard: 40 } },
-    shotgun:  { icon: '💥', name: '산탄', desc: '조준 방향 ±20° 세 갈래, 사거리 3칸. 겹쳐 맞으면 누적', aim: true, dmg: { easy: 12, hard: 16 } },
-    ricochet: { icon: '🌀', name: '도탄', desc: '조준 방향으로 쏘면 벽에 3번 튕기며 관통. 튕긴 탄에 자신도 맞을 수 있음', aim: true, dmg: { easy: 20, hard: 28 } },
-    bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 20, hard: 28 } },
-    rook:     { icon: '➕', name: '룩', desc: '가로·세로 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 20, hard: 28 } },
-    knight:   { icon: '🐴', name: '나이트', desc: 'L자 칸(체스 나이트 이동)을 골라 뛰어들어, 착지한 곳 주변 8칸의 적을 모두 타격', target: true, dmg: { easy: 34, hard: 44 } },
-    king:     { icon: '👑', name: '킹', desc: '주변 8칸을 강타', dmg: { easy: 35, hard: 45 } },
+    sniper:   { icon: '🎯', name: '저격', desc: '조준 방향으로 직선 발사. 처음 맞는 적에게 피해', aim: true, dmg: { easy: 24, hard: 32 } },
+    shotgun:  { icon: '💥', name: '산탄', desc: '조준 방향 ±20° 세 갈래, 사거리 3칸. 겹쳐 맞으면 누적', aim: true, dmg: { easy: 17, hard: 22 } },
+    ricochet: { icon: '🌀', name: '도탄', desc: '조준 방향으로 쏘면 벽에 3번 튕기며 관통. 튕긴 탄에 자신도 맞을 수 있음', aim: true, dmg: { easy: 13, hard: 18 } },
+    bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
+    rook:     { icon: '➕', name: '룩', desc: '가로·세로 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
+    knight:   { icon: '🐴', name: '나이트', desc: 'L자 칸(체스 나이트 이동)을 골라 뛰어들어, 착지한 곳 주변 8칸의 적을 모두 타격', target: true, dmg: { easy: 28, hard: 37 } },
+    king:     { icon: '👑', name: '킹', desc: '주변 8칸을 강타', dmg: { easy: 37, hard: 48 } },
     mortar:   { icon: '💣', name: '박격포', desc: '5칸 안의 칸을 골라 3×3 폭발 (가장자리 60%). 범위 안이면 자신도 맞음', target: true, dmg: { easy: 25, hard: 35 } },
-    scatter:  { icon: '🎲', name: '난사', desc: '무작위 좌표로 발사, 벽에 3번 튕기며 관통. 운에 맡기는 한 방', dmg: { easy: 30, hard: 40 } },
-    queen:    { icon: '👸', name: '퀸', desc: '가로·세로·대각선 8방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 13, hard: 18 } },
+    scatter:  { icon: '🎲', name: '난사', desc: '무작위 적 근처(±1칸) 무작위 좌표로 세 발, 각각 벽에 3번 튕기며 관통 (겹치면 누적). 운에 맡기는 한 방', dmg: { easy: 14, hard: 19 } },
+    queen:    { icon: '👸', name: '퀸', desc: '가로·세로·대각선 8방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 19, hard: 26 } },
     laser:    { icon: '🔦', name: '레이저', desc: '조준 방향 일직선을 끝까지 관통 (반사 없음)', aim: true, dmg: { easy: 22, hard: 30 } },
-    spear:    { icon: '🔱', name: '창', desc: '조준 방향 2칸 거리까지 관통하는 강한 찌르기', aim: true, dmg: { easy: 38, hard: 50 } },
-    vampire:  { icon: '🧛', name: '흡혈', desc: '조준 방향 직선, 처음 맞는 적. 준 피해의 절반만큼 회복', aim: true, dmg: { easy: 24, hard: 32 } },
-    chain:    { icon: '🌩️', name: '체인 번개', desc: '4칸 안의 가장 가까운 적부터 3칸 안의 다음 적으로 튕기며 최대 3명', dmg: { easy: 18, hard: 25 } },
-    whirl:    { icon: '🌪️', name: '회오리', desc: '주변 2칸(5×5) 안의 모든 적을 휩쓸기', dmg: { easy: 18, hard: 25 } },
+    spear:    { icon: '🔱', name: '창', desc: '조준 방향 2칸 거리까지 관통하는 강한 찌르기', aim: true, dmg: { easy: 35, hard: 46 } },
+    vampire:  { icon: '🧛', name: '흡혈', desc: '조준 방향 직선, 처음 맞는 적. 준 피해의 1/3 만큼 회복', aim: true, dmg: { easy: 19, hard: 26 } },
+    chain:    { icon: '🌩️', name: '체인 번개', desc: '4칸 안의 가장 가까운 적부터 3칸 안의 다음 적으로 튕기며 최대 3명', dmg: { easy: 20, hard: 28 } },
+    whirl:    { icon: '🌪️', name: '회오리', desc: '주변 2칸(5×5) 안의 모든 적을 휩쓸기', dmg: { easy: 25, hard: 33 } },
   };
   const STYLE_KEYS = Object.keys(STYLES);
   const OFFER_N = 3;
   const MOVE_RANGE = { easy: 2, hard: 3, killer: 4 };
   const MORTAR_RANGE = 5;
+  const SCATTER_SHOTS = 3;   // 난사: 무작위 적 근처(±1칸) 무작위 좌표로 세 발
+  function scatterTargets(p, r = rand) {
+    const foes = enemies(p), out = [];
+    for (let guard = 0; out.length < SCATTER_SHOTS && guard < 200; guard++) {
+      const q = foes.length ? foes[r(foes.length)] : null;
+      const t = q ? [q.x + r(3) - 1, q.y + r(3) - 1] : [r(N), r(N)];
+      if (inB(t[0], t[1]) && !(t[0] === p.x && t[1] === p.y)) out.push(t);
+    }
+    return out;
+  }
 
   /** 증강 후보: 게임 seed + 플레이어 번호로 정해져 새로고침해도 바뀌지 않는다 */
   function offersFor(p) {
@@ -1018,7 +1028,12 @@
       }
       return best;
     }
-    if (style === 'scatter') return { score: 0.6, ang: p.ang };   // 운에 맡기는 한 방
+    if (style === 'scatter') {
+      // 운에 맡기는 한 방: 무작위 목표 몇 개로 기대 명중 수를 어림한다
+      let sum = 0, n = 0;
+      for (let i = 0; i < 8; i++) { sum += count(planAttack(p, style, scatterTargets(p, k => Math.floor(Math.random() * k)))); n++; }
+      return { score: n ? sum / n : 0, ang: p.ang, gamble: true };
+    }
     if (!s.aim) return { score: count(planAttack(p, style, null)), ang: p.ang };
     const a0 = p.ang;
     let best = { score: 0, ang: a0 };
@@ -1048,7 +1063,7 @@
     const canAttack = brawl() || !(prepRound() || S.extraActive);
     const atk = canAttack ? botBestAttack(p) : { score: 0 };
     const low = p.hp <= S.maxHp * 0.35;
-    if (atk.score >= 1 && !(low && atk.score < 1.5 && chance(0.3))) {
+    if ((atk.score >= 1 || (atk.gamble && atk.score >= 0.35)) && !(low && atk.score < 1.5 && chance(0.3))) {
       act.key = 'attack';
       if (atk.ang != null) act.ang = atk.ang;
       if (atk.tgt) act.tgt = atk.tgt;
@@ -1488,6 +1503,7 @@
     }
     const before = t.hp;
     t.hp = Math.max(0, t.hp - amt);
+    if (src && src !== t) src.dealt = (src.dealt || 0) + (before - t.hp);
     floatText(t, `-${amt}`, 'dmg');
     hitFx(t);
     if (window.Sfx) Sfx.hurt(t.id);
@@ -1618,7 +1634,9 @@
         if (hits.length) rays.push({ pts, hits });
         break;
       }
-      case 'scatter': if (target) ray(angTo(p, target[0], target[1]), { bounces: 3, pierce: true }); break;
+      case 'scatter': // 목표 하나 [x, y] 또는 여러 개 [[x, y], …]
+        if (target) (Array.isArray(target[0]) ? target : [target]).forEach(t => ray(angTo(p, t[0], t[1]), { bounces: 3, pierce: true }));
+        break;
     }
     return { rays, cells };
   }
@@ -1670,16 +1688,20 @@
       log(`${tag(p)} 💥 강화탄 발동! 피해 ${POWER_MULT}배`);
     }
     let tgt = target;
+    let tgts = tgt ? [tgt] : [];
     if (p.style === 'scatter') {
-      do { tgt = [rand(N), rand(N)]; } while (!inB(tgt[0], tgt[1]) || (tgt[0] === p.x && tgt[1] === p.y));
+      tgts = scatterTargets(p);
+      tgt = tgts[0];
     }
     let cross = null;
     if (tgt) {
       cross = svg('g', {});
-      svg('circle', { class: 'crosshair', cx: tgt[0] + 0.5, cy: tgt[1] + 0.5, r: 0.35 }, cross);
-      svg('line', { class: 'crosshair', x1: tgt[0] + 0.1, y1: tgt[1] + 0.5, x2: tgt[0] + 0.9, y2: tgt[1] + 0.5 }, cross);
-      svg('line', { class: 'crosshair', x1: tgt[0] + 0.5, y1: tgt[1] + 0.1, x2: tgt[0] + 0.5, y2: tgt[1] + 0.9 }, cross);
-      toast(`${s.icon} ${s.name} → ${coord(tgt[0], tgt[1])}`);
+      for (const t of tgts) {
+        svg('circle', { class: 'crosshair', cx: t[0] + 0.5, cy: t[1] + 0.5, r: 0.35 }, cross);
+        svg('line', { class: 'crosshair', x1: t[0] + 0.1, y1: t[1] + 0.5, x2: t[0] + 0.9, y2: t[1] + 0.5 }, cross);
+        svg('line', { class: 'crosshair', x1: t[0] + 0.5, y1: t[1] + 0.1, x2: t[0] + 0.5, y2: t[1] + 0.9 }, cross);
+      }
+      toast(p.style === 'scatter' ? `${s.icon} ${s.name} ×${SCATTER_SHOTS}!` : `${s.icon} ${s.name} → ${coord(tgt[0], tgt[1])}`);
       await sleep(p.style === 'scatter' ? 900 : 400);
     } else {
       toast(`${s.icon} ${s.name}!`);
@@ -1702,15 +1724,16 @@
       tgt = null;
       if (cross) { cross.remove(); cross = null; }
     }
-    const plan = planAttack(p, p.style, p.style === 'knight' ? [p.x, p.y] : tgt);
+    const plan = planAttack(p, p.style, p.style === 'knight' ? [p.x, p.y] : p.style === 'scatter' ? tgts : tgt);
     let hitCount = 0;
+    p.atk = (p.atk || 0) + 1;
     await Promise.all(plan.rays.map(r => animatePath(r.pts, p.color, 12, r.hits.map(h => ({
       d: h.d,
       fn: () => {
         hitCount++;
         burst(h.at[0], h.at[1], '#ff5d6c');
         const dealt = damage(h.q, dmg, p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회)` : ''}`);
-        if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 2));
+        if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 3));
       },
     })))));
     if (plan.cells.length) {
@@ -1724,6 +1747,7 @@
       }
     }
     if (cross) cross.remove();
+    if (hitCount) p.landed = (p.landed || 0) + 1;
     if (!hitCount) log(`${tag(p)} ${s.icon} ${s.name}… 빗나감`);
   }
 
@@ -1845,7 +1869,7 @@
     await new Promise(r => {
       ok.onclick = r;
       S.keyHandler = e => { if (e.key === 'Enter') { e.preventDefault(); r(); } };
-      if (S.online) setTimeout(r, 1800); // 온라인: 모두의 화면이 멈추지 않도록 자동 진행
+      if (S.online || p.bot) setTimeout(r, 1800); // 온라인·AI: 화면이 멈추지 않도록 자동 진행
     });
     closeModal();
     log(`${tag(p)} 🎁 랜덤박스: ${res.icon} ${res.name}`);
@@ -2695,6 +2719,25 @@
       if (e.key === 'ArrowLeft') { e.preventDefault(); setAim(cur().ang - step); }
       if (e.key === 'ArrowRight') { e.preventDefault(); setAim(cur().ang + step); }
     }
+  }
+
+  // 밸런스 시뮬레이션용 (주소에 ?sim 이 있을 때만): AI 끼리 스타일을 정해 붙이고 결과를 읽는다
+  if (/[?&]sim\b/.test(location.search)) {
+    window.__sim = {
+      styles: Object.keys(STYLES),
+      start(styles, hp = DEFAULT_HP) {
+        S.localCount = styles.length;
+        S.localBots = new Set(styles.map((_, i) => i));
+        S.maxHp = hp;
+        $('#optTimer').checked = false;
+        startGame();
+        S.players.forEach((p, i) => { p.style = styles[i]; });
+      },
+      state() {
+        return { phase: S.phase, round: S.round,
+          players: S.players.map(p => ({ style: p.style, hp: p.hp, alive: p.alive, dealt: p.dealt || 0, atk: p.atk || 0, landed: p.landed || 0 })) };
+      },
+    };
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
