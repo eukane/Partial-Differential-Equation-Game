@@ -11,7 +11,7 @@ render() {
     -o synth.chorus.active=0 \
     -F "$2" "$SF" "$1"
 }
-for n in battle pinch victory swing-battle swing-pinch swing-victory swing2-battle; do
+for n in battle pinch victory swing-battle swing-pinch swing-victory; do
   if [ -f out/$n.music.mid ]; then
     # 스템 믹스: 음악·드럼을 따로 렌더 → 합성 킥 레이어 → 킥이 칠 때마다 음악이 눌렸다 올라오는 사이드체인 펌핑
     render out/$n.music.mid out/$n.music.wav

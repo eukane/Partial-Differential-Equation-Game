@@ -13,16 +13,15 @@
   const VOL = 0.5;
   const FADE = 1.0;
   const BASE = 'audio/';
-  const VER = '?v=20260925-16';
+  const VER = '?v=20260925-17';
   // tools/music/out/loops.json 과 같은 값 (초)
   const LOOPS = {
     'battle': { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },
     'pinch': { loopStart: 20.869565217391305, loopEnd: 41.73913043478261 },
     'victory': null,
-    'swing-battle': { loopStart: 13.714285714285714, loopEnd: 61.714285714285715 },
+    'swing-battle': { loopStart: 12.972972972972974, loopEnd: 129.72972972972974 },
     'swing-pinch': { loopStart: 1.4634146341463414, loopEnd: 24.878048780487806 },
     'swing-victory': null,
-    'swing2-battle': { loopStart: 13.714285714285714, loopEnd: 68.57142857142857 },
   };
 
   let ctx = null, out = null;
@@ -33,13 +32,11 @@
   try {
     muted = localStorage.getItem('pdeb-mute') === '1';
     const saved = localStorage.getItem('pdeb-bgm');
-    if (saved === 'orch' || saved === 'swing2') style = saved;
+    if (saved === 'orch') style = saved;
   } catch (e) { /* 저장소 없음 */ }
-  const STYLES = ['swing', 'swing2', 'orch'];
-  /** 'battle' → 'swing-battle' (일렉트로스윙) · 'swing2-battle' (고음 하이라이트 버전, 임시 — 위기 테마·승리는 swing 것) · 'battle' (오케스트라 록) */
-  const file = n => (style === 'swing' ? 'swing-' + n
-    : style === 'swing2' ? (n === 'battle' ? 'swing2-battle' : 'swing-' + n)
-    : n);
+  const STYLES = ['swing', 'orch'];
+  /** 'battle' → 'swing-battle' (일렉트로스윙) 또는 'battle' (오케스트라 록) */
+  const file = n => (style === 'swing' ? 'swing-' + n : n);
 
   function init() {
     if (ctx) return true;
