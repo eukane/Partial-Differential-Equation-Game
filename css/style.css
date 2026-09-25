@@ -575,3 +575,7 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .sp-body input[type=range] { width: 100%; accent-color: #ffc53d; margin: 4px 0 0; }
 .sound-panel .small { margin: 0; text-align: center; }
 @media (max-width: 860px) { .sound-panel { top: 50px; right: 8px; } }
+
+.fx .guide-times { font-size: .34px; font-weight: 800; fill: #ff5d6c; stroke: #0b1020; stroke-width: .06px; paint-order: stroke; }
+.fx .guide.limit { stroke-dasharray: .12 .12; opacity: .55; }
+.chip.limit-chip { background: #3d2a14; color: #ffcf8a; }

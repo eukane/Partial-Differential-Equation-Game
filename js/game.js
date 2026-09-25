@@ -345,7 +345,7 @@
     setBoard(n);
     const ang = Math.round(normAng(Math.atan2(3.5 - x, -(3.5 - y)) * 180 / Math.PI) / 5) * 5;
     return { id: i, name, color: p.color, emoji: p.emoji, x, y, ang, style: null,
-      hp: S.maxHp, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0, bot: !!bot };
+      hp: S.maxHp, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0, bot: !!bot, aimBase: ang };
   }
 
   function startGame() {
@@ -614,7 +614,7 @@
     };
     el.turnPanel.innerHTML = head + `
       <div class="aim-box">
-        <div class="aim-row"><b>🧭 조준 ${Math.round(p.ang)}°</b><span class="chip free-chip">무료</span></div>
+        <div class="aim-row"><b>🧭 조준 ${Math.round(p.ang)}°</b>${aimLimited(p) ? `<span class="chip limit-chip">🎯 이번 턴 ±${SNIPER_TURN}°</span>` : ''}<span class="chip free-chip">무료</span></div>
         <div class="rot-btns four">
           <button data-r="-15" ${dis}>⟲ 15°</button><button data-r="-5" ${dis}>⟲ 5°</button>
           <button data-r="5" ${dis}>5° ⟳</button><button data-r="15" ${dis}>15° ⟳</button>
@@ -850,6 +850,7 @@
       if (S.players[id].alive && (id !== S.turn || aliveCount < 2)) break;
     }
     S.pos = pos; S.round = round; S.turn = id;
+    S.players[id].aimBase = S.players[id].ang;   // 저격 조준 제한의 기준 (이번 턴 시작 방향)
     await sleep(350);
     if (S.online) startOnlineTurn();
     else showHandover();
@@ -911,8 +912,10 @@
   // ------------------------------------------------------------------
   //  증강 (공격 스타일) — 각 플레이어가 첫 차례에 무작위 3개 중 하나를 고른다
   // ------------------------------------------------------------------
+  const SNIPER_TURN = 30;     // 저격: 한 턴에 돌릴 수 있는 조준 각도 (턴 시작 방향 ±)
+  const SNIPER_BOUNCES = 2;   // 저격 탄: 관통하며 벽에 두 번 튕긴다 (같은 적을 여러 번 맞힐 수 있음)
   const STYLES = {
-    sniper:   { icon: '🎯', name: '저격', desc: '조준 방향으로 직선 발사. 처음 맞는 적에게 피해', aim: true, dmg: { easy: 24, hard: 32 } },
+    sniper:   { icon: '🎯', name: '저격', desc: `관통하며 벽에 ${SNIPER_BOUNCES}번 튕기는 탄. 튕긴 탄이 같은 적을 또 맞힐 수 있음 (자신은 안 맞음). 대신 한 턴에 조준을 ±${SNIPER_TURN}°까지만 돌릴 수 있음`, aim: true, dmg: { easy: 16, hard: 22 } },
     shotgun:  { icon: '💥', name: '산탄', desc: '조준 방향 ±20° 세 갈래, 사거리 3칸. 겹쳐 맞으면 누적', aim: true, dmg: { easy: 17, hard: 22 } },
     ricochet: { icon: '🌀', name: '도탄', desc: '조준 방향으로 쏘면 벽에 3번 튕기며 관통. 튕긴 탄에 자신도 맞을 수 있음', aim: true, dmg: { easy: 13, hard: 18 } },
     bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
@@ -932,6 +935,15 @@
   const OFFER_N = 3;
   const MOVE_RANGE = { easy: 2, hard: 3, killer: 4 };
   const MORTAR_RANGE = 5;
+  /** 저격은 턴 시작 때 바라보던 방향에서 ±SNIPER_TURN 까지만 조준할 수 있다 */
+  const aimLimited = p => p && p.style === 'sniper' && p.aimBase != null;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+  function clampAim(p, a) {
+    a = normAng(a);
+    if (!aimLimited(p)) return a;
+    const d = Math.max(-SNIPER_TURN, Math.min(SNIPER_TURN, angDiff(a, p.aimBase)));
+    return Math.round(normAng(p.aimBase + d) * 10) / 10;
+  }
   const SCATTER_SHOTS = 3;   // 난사: 무작위 적 근처(±1칸) 무작위 좌표로 세 발
   function scatterTargets(p, r = rand) {
     const foes = enemies(p), out = [];
@@ -1045,7 +1057,8 @@
     if (!s.aim) return { score: count(planAttack(p, style, null)), ang: p.ang };
     const a0 = p.ang;
     let best = { score: 0, ang: a0 };
-    for (let a = 0; a < 360; a += 5) {
+    const range = aimLimited(p) ? [...Array(2 * SNIPER_TURN / 5 + 1).keys()].map(k => normAng(p.aimBase - SNIPER_TURN + 5 * k)) : [...Array(72).keys()].map(k => k * 5);
+    for (const a of range) {
       p.ang = a;
       const v = count(planAttack(p, style, null));
       if (v > best.score) best = { score: v, ang: a };
@@ -1151,7 +1164,7 @@
 
   function setAim(a) {
     if (!myTurn() || S.phase !== 'choose') return;
-    cur().ang = Math.round(normAng(a) * 10) / 10;
+    cur().ang = Math.round(clampAim(cur(), a) * 10) / 10;
     S.localAim = cur().ang;
     Net.liveAim(cur().ang);
     renderAll();
@@ -1285,7 +1298,7 @@
         renderAll();
         return;
       }
-      if (act.ang != null) p.ang = act.ang;
+      if (act.ang != null) p.ang = clampAim(p, act.ang);
       S.phase = 'busy';
       p.tries++;
       if (act.ok) { p.correct++; p.score += act.pts || 0; }
@@ -1332,6 +1345,7 @@
         }
         return;
       }
+      if (act.ang != null) act.ang = clampAim(p, act.ang);
       if (act.ang != null && !mine) p.ang = act.ang;
       p.tries++;
       if (act.ok) { p.correct++; p.score += act.pts || 0; }
@@ -1339,6 +1353,7 @@
       if (!act.ok) return;
       if (mine) { const a0 = p.ang; p.ang = act.ang; await perform(p, act); if (p.ang === act.ang) p.ang = a0; }
       else await perform(p, act);
+      if (act.ang != null) p.aimBase = act.ang;
       checkWin();
     } finally {
       if (mine) S.myBusy = false;
@@ -1532,7 +1547,7 @@
   // ------------------------------------------------------------------
   const HIT_R = 0.42;
   /** (ox, oy) 에서 각도 a 로 쏜 탄의 경로와 적중. 벽 반사, 관통, 사거리 지원 */
-  function traceRay(p, ox, oy, a, { maxLen = Infinity, bounces = 0, pierce = false } = {}) {
+  function traceRay(p, ox, oy, a, { maxLen = Infinity, bounces = 0, pierce = false, multi = false, noSelf = false } = {}) {
     const EPS = 1e-9;
     let pos = [ox, oy];
     let v = vec(a);
@@ -1556,7 +1571,8 @@
       }
       const found = [];
       for (const q of S.players) {
-        if (!q.alive || (seg === 0 && q === p) || hits.some(h => h.q === q)) continue;
+        // multi: 벽에 튕긴 뒤 같은 적을 또 맞힐 수 있다 (한 구간에서는 한 번) · noSelf: 쏜 사람은 안 맞는다
+        if (!q.alive || ((seg === 0 || noSelf) && q === p) || (!multi && hits.some(h => h.q === q))) continue;
         const cx = q.x + 0.5 - pos[0], cy = q.y + 0.5 - pos[1];
         const s = cx * v[0] + cy * v[1];
         if (s < 0.05 || s > t) continue;
@@ -1596,7 +1612,7 @@
       }
     };
     switch (style) {
-      case 'sniper': ray(p.ang); break;
+      case 'sniper': ray(p.ang, { bounces: SNIPER_BOUNCES, pierce: true, multi: true, noSelf: true }); break;
       case 'shotgun': [-20, 0, 20].forEach(d => ray(p.ang + d, { maxLen: 3.5 })); break;
       case 'ricochet': ray(p.ang, { bounces: 3, pierce: true }); break;
       case 'bishop': [45, 135, 225, 315].forEach(a => ray(a)); break;
@@ -1650,7 +1666,7 @@
   }
 
   function renderGuide() {
-    clearFx('.guide, .guide-end, .guide-cell, .guide-hit');
+    clearFx('.guide, .guide-end, .guide-cell, .guide-hit, .guide-times');
     const p = cur();
     const on = p && p.alive && S.phase === 'choose';
     el.cells.classList.toggle('aimable', !!on && myTurn());
@@ -1678,8 +1694,20 @@
       const q = at(x, y, p);
       if (q) marked.add(q);
     }
-    // 이대로 쏘면 맞는 적 표시
-    for (const q of marked) svg('circle', { class: 'guide-hit', cx: q.x + 0.5, cy: q.y + 0.5, r: 0.46 });
+    // 이대로 쏘면 맞는 적 표시 (여러 번 맞으면 ×n)
+    const times = new Map();
+    for (const r of plan.rays) for (const h of r.hits) times.set(h.q, (times.get(h.q) || 0) + 1);
+    for (const q of marked) {
+      svg('circle', { class: 'guide-hit', cx: q.x + 0.5, cy: q.y + 0.5, r: 0.46 });
+      if ((times.get(q) || 0) > 1) svg('text', { class: 'guide-times', x: q.x + 0.95, y: q.y + 0.2 }).textContent = `×${times.get(q)}`;
+    }
+    // 저격: 이번 턴에 돌릴 수 있는 조준 범위
+    if (aimLimited(p) && myTurn()) {
+      for (const d of [-SNIPER_TURN, SNIPER_TURN]) {
+        const [vx, vy] = vec(p.aimBase + d);
+        svg('line', { class: 'guide faint limit', x1: p.x + 0.5, y1: p.y + 0.5, x2: p.x + 0.5 + vx * 2.2, y2: p.y + 0.5 + vy * 2.2, stroke: p.color });
+      }
+    }
     // 위치형 스타일도 바라보는 방향(카메라)은 보이게
     if (!plan.rays.length && !plan.cells.length || !STYLES[p.style].aim) {
       const [vx, vy] = vec(p.ang);
@@ -1988,7 +2016,7 @@
   function snapshot() {
     return {
       t: S.turn, r: S.round, o: S.pos, x: S.extraActive ? 1 : 0, g: S.gseed, c: S.coins, m: S.maxHp,
-      p: S.players.map(p => [p.x, p.y, Math.round(p.ang * 10), p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries, p.score, STYLE_KEYS.indexOf(p.style)]),
+      p: S.players.map(p => [p.x, p.y, Math.round(p.ang * 10), p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries, p.score, STYLE_KEYS.indexOf(p.style), Math.round((p.aimBase == null ? p.ang : p.aimBase) * 10)]),
     };
   }
   function loadSnapshot(b) {
@@ -2010,6 +2038,7 @@
       p.hp = int(a[3], 0, S.maxHp); p.alive = !!a[4] && p.hp > 0; p.shield = !!a[5]; p.power = !!a[6];
       p.correct = int(a[7], 0, 9999); p.tries = int(a[8], 0, 9999); p.score = int(a[9], 0, 1e7);
       p.style = STYLE_KEYS[int(a[10], -1, STYLE_KEYS.length - 1, -1)] || null;
+      p.aimBase = a[11] == null ? p.ang : int(a[11], 0, 3599) / 10;
     });
   }
   /** 다른 사람이 보낸 act 는 믿지 않고 형식을 맞춘다 */
@@ -2740,6 +2769,13 @@
         $('#optTimer').checked = false;
         startGame();
         S.players.forEach((p, i) => { p.style = styles[i]; });
+      },
+      /** 테스트용: i 번 말을 (x, y) 에 두고 ang 방향으로, 지금 공격하면 누가 몇 번 맞는지 */
+      place(i, x, y, ang) { const p = S.players[i]; p.x = x; p.y = y; if (ang != null) { p.ang = ang; p.aimBase = ang; } renderAll(); },
+      hits(i) {
+        const p = S.players[i], plan = planAttack(p, p.style, null), out = {};
+        for (const r of plan.rays) for (const h of r.hits) out[h.q.name] = (out[h.q.name] || 0) + 1;
+        return out;
       },
       state() {
         return { phase: S.phase, round: S.round,
