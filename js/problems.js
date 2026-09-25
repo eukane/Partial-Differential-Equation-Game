@@ -24,6 +24,75 @@
 
   // ---- TeX 포맷 도우미 -------------------------------------------------
   const T = s => `$${s}$`;
+
+  /** 보기의 LaTeX 를 숫자로 계산 (e, π, 분수, 제곱근, 거듭제곱, ln·log·sin·cos·tan). 계산할 수 없는 보기(문자·식·말)는 null */
+  function texValue(src) {
+    const s = String(src).replace(/^\$+|\$+$/g, '').replace(/\\left|\\right|\\displaystyle/g, '').replace(/\\[,;!: ]/g, '').replace(/~/g, '');
+    const tk = [];
+    for (let i = 0; i < s.length;) {
+      const c = s[i];
+      if (/\s/.test(c)) { i++; continue; }
+      if (/[0-9.]/.test(c)) { let j = i; while (j < s.length && /[0-9.]/.test(s[j])) j++; tk.push(['n', parseFloat(s.slice(i, j))]); i = j; continue; }
+      if (c === '\\') { let j = i + 1; while (j < s.length && /[a-zA-Z]/.test(s[j])) j++; if (j === i + 1) j++; tk.push(['c', s.slice(i + 1, j)]); i = j; continue; }
+      tk.push(['h', c]); i++;
+    }
+    let p = 0;
+    const is = (t, v) => tk[p] && tk[p][0] === t && tk[p][1] === v;
+    const expect = v => { if (!is('h', v)) throw 0; p++; };
+    const FUN = { ln: Math.log, sin: Math.sin, cos: Math.cos, tan: Math.tan, log: Math.log10 };
+    const group = () => {
+      if (is('h', '{')) { p++; const v = expr(); expect('}'); return v; }
+      const t = tk[p++];
+      if (t && t[0] === 'n') return t[1];
+      if (t && t[0] === 'h' && t[1] === 'e') return Math.E;
+      if (t && t[0] === 'c' && t[1] === 'pi') return Math.PI;
+      throw 0;
+    };
+    const atom = () => {
+      const t = tk[p];
+      if (!t) throw 0;
+      if (t[0] === 'n') { p++; return t[1]; }
+      if (t[0] === 'h' && t[1] === 'e') { p++; return Math.E; }
+      if (t[0] === 'h' && t[1] === '(') { p++; const v = expr(); expect(')'); return v; }
+      if (t[0] === 'h' && t[1] === '{') return group();
+      if (t[0] === 'c') {
+        p++;
+        if (t[1] === 'pi') return Math.PI;
+        if (/^[dt]?frac$/.test(t[1])) { const a = group(); return a / group(); }
+        if (t[1] === 'sqrt') { let n = 2; if (is('h', '[')) { p++; n = expr(); expect(']'); } return Math.pow(group(), 1 / n); }
+        if (FUN[t[1]]) {
+          let base = null, pw = null;
+          if (t[1] === 'log' && is('h', '_')) { p++; base = group(); }
+          if (is('h', '^')) { p++; pw = group(); }
+          const arg = power();
+          const v = base != null ? Math.log(arg) / Math.log(base) : FUN[t[1]](arg);
+          return pw != null ? Math.pow(v, pw) : v;
+        }
+      }
+      throw 0;
+    };
+    const power = () => { const b = atom(); if (is('h', '^')) { p++; return Math.pow(b, is('h', '{') ? group() : unary()); } return b; };
+    const unary = () => { if (is('h', '-')) { p++; return -unary(); } if (is('h', '+')) { p++; return unary(); } return power(); };
+    const starts = t => t && (t[0] === 'n' || (t[0] === 'h' && '({e'.includes(t[1])) || (t[0] === 'c' && /^(pi|[dt]?frac|sqrt|ln|sin|cos|tan|log)$/.test(t[1])));
+    const term = () => {
+      let v = unary();
+      for (;;) {
+        if (is('c', 'cdot') || is('c', 'times')) { p++; v *= unary(); }
+        else if (starts(tk[p])) v *= power();
+        else return v;
+      }
+    };
+    function expr() {
+      let v = term();
+      for (;;) {
+        if (is('h', '+')) { p++; v += term(); } else if (is('h', '-')) { p++; v -= term(); } else return v;
+      }
+    }
+    try {
+      const v = expr();
+      return p === tk.length && Number.isFinite(v) ? v : null;
+    } catch (e) { return null; }
+  }
   /** 계수: 1 → '', -1 → '-' */
   const cx = a => (a === 1 ? '' : a === -1 ? '-' : String(a));
   /** ' + 3' / ' - 3' */
@@ -64,9 +133,15 @@
   // ---- 보기 구성 ------------------------------------------------------
   function build(topic, q, correct, wrongs, explain) {
     const seen = new Set([correct]);
+    const vals = [texValue(correct)];
     const w = [];
     for (const x of wrongs) {
       if (x == null || seen.has(x)) continue;
+      if (/\\[dt]?frac\{[^{}]*\}\{0\}/.test(x)) continue;   // 분모가 0 인 엉터리 보기
+      // 글자는 달라도 값이 같은 보기(예: e^{1}+3 과 e+3)는 정답이 두 개가 되므로 뺀다
+      const v = texValue(x);
+      if (v != null && vals.some(u => u != null && Math.abs(u - v) <= 1e-9 * Math.max(1, Math.abs(u)))) continue;
+      vals.push(v);
       seen.add(x);
       w.push(x);
       if (w.length === 3) break;
@@ -904,7 +979,8 @@
       return build('지수·로그함수의 미분',
         `$f(x) = e^{${cx(a)}x} + ${cx(b)}\\ln x$ 일 때, $f'(1)$ 의 값은?`,
         T(`${E} + ${b}`),
-        [`e^{${a}} + ${b}`, `${E}`, `${E} + ${b + 1}`, `${a === 1 ? '' : a}e + ${b}`, `${E} - ${b}`].map(T),
+        // a = 1 이면 'e^{1} + b', 'e + b' 가 정답과 같은 값이 되므로 다른 오답으로
+        [a > 1 ? `e^{${a}} + ${b}` : `e^{2} + ${b}`, `${E}`, `${E} + ${b + 1}`, a > 1 ? `${a}e + ${b}` : `${b + 1}e`, `${E} - ${b}`].map(T),
         `$f'(x) = ${cx(a)}e^{${cx(a)}x} + \\dfrac{${b}}{x}$ → $f'(1) = ${E} + ${b}$`);
     },
   ];
@@ -1181,7 +1257,7 @@
       return build('접선의 방정식 (다단계)',
         `곡선 $y = xe^x$ 위의 점 $(${k},\\ ${k === 1 ? '' : k}${E})$ 에서의 접선의 $y$ 절편은?`,
         T(`-${k * k === 1 ? '' : k * k}${E}`),
-        [`${k * k === 1 ? '' : k * k}${E}`, `-${k}${E}`, `${k + 1}${E}`, `-${k * (k + 1)}${E}`, `-${E}`].map(T),
+        [`${k * k === 1 ? '' : k * k}${E}`, `-${k === 1 ? '' : k}${E}`, `${k + 1}${E}`, `-${k * (k + 1)}${E}`, `-${E}`, `-${k + 1}${E}`].map(T),
         `① $y' = (x + 1)e^x$ → 기울기 $${k + 1}${E}$. ② $y = ${k + 1}${E}(x - ${k}) + ${k === 1 ? '' : k}${E}$. ③ $x = 0$: $${k}${E} - ${k * (k + 1)}${E} = -${k * k === 1 ? '' : k * k}${E}$`);
     },
     function expFuncMax() {
@@ -1523,7 +1599,7 @@
       const ans = `${a === 1 ? '' : a}e`;
       return withP(build('원점을 지나는 접선 (다단계)',
         `원점에서 곡선 $y = e^{${a === 1 ? '' : a}x}$ 에 그은 접선의 기울기는?`, T(ans),
-        ['e', '1', `${a + 1}e`, `\\frac{e}{${a}}`, `${2 * a}e`, 'e^2', `${a}`].map(T),
+        ['e', '1', `${a + 1}e`, a > 1 ? `\\frac{e}{${a}}` : '\\frac{e}{2}', `${2 * a}e`, 'e^2', `${a}`].map(T),
         `접점 $(t,\\ e^{${a}t})$: $e^{${a}t} = ${a}e^{${a}t}\\cdot t$ → $t = \\frac{1}{${a}}$ → 기울기 $${a}e^{1} = ${ans}$`), { a });
     },
     function rootCount() {
