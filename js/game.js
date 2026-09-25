@@ -791,11 +791,11 @@
   // ------------------------------------------------------------------
   const STYLES = {
     sniper:   { icon: '🎯', name: '저격', desc: '조준 방향으로 직선 발사. 처음 맞는 적에게 피해', aim: true, dmg: { easy: 30, hard: 40 } },
-    shotgun:  { icon: '💥', name: '산탄', desc: '조준 방향 ±20° 세 갈래, 사거리 4칸. 겹쳐 맞으면 누적', aim: true, dmg: { easy: 15, hard: 20 } },
+    shotgun:  { icon: '💥', name: '산탄', desc: '조준 방향 ±20° 세 갈래, 사거리 3칸. 겹쳐 맞으면 누적', aim: true, dmg: { easy: 12, hard: 16 } },
     ricochet: { icon: '🌀', name: '도탄', desc: '조준 방향으로 쏘면 벽에 3번 튕기며 관통. 튕긴 탄에 자신도 맞을 수 있음', aim: true, dmg: { easy: 20, hard: 28 } },
     bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 20, hard: 28 } },
     rook:     { icon: '➕', name: '룩', desc: '가로·세로 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 20, hard: 28 } },
-    knight:   { icon: '🐴', name: '나이트', desc: '나이트가 갈 수 있는 L자 칸 8곳을 동시에 타격', dmg: { easy: 30, hard: 40 } },
+    knight:   { icon: '🐴', name: '나이트', desc: '나이트가 갈 수 있는 L자 칸 8곳을 동시에 타격', dmg: { easy: 42, hard: 54 } },
     king:     { icon: '👑', name: '킹', desc: '주변 8칸을 강타', dmg: { easy: 35, hard: 45 } },
     mortar:   { icon: '💣', name: '박격포', desc: '5칸 안의 칸을 골라 3×3 폭발 (가장자리 60%). 범위 안이면 자신도 맞음', target: true, dmg: { easy: 25, hard: 35 } },
     scatter:  { icon: '🎲', name: '난사', desc: '무작위 좌표로 발사, 벽에 3번 튕기며 관통. 운에 맡기는 한 방', dmg: { easy: 30, hard: 40 } },
@@ -1297,7 +1297,7 @@
     };
     switch (style) {
       case 'sniper': ray(p.ang); break;
-      case 'shotgun': [-20, 0, 20].forEach(d => ray(p.ang + d, { maxLen: 4.5 })); break;
+      case 'shotgun': [-20, 0, 20].forEach(d => ray(p.ang + d, { maxLen: 3.5 })); break;
       case 'ricochet': ray(p.ang, { bounces: 3, pierce: true }); break;
       case 'bishop': [45, 135, 225, 315].forEach(a => ray(a)); break;
       case 'rook': [0, 90, 180, 270].forEach(a => ray(a)); break;
