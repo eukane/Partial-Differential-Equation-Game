@@ -51,17 +51,30 @@ CH = {
     'brass': (13, 61, 92, 80, 70),   # 금관 섹션
     'vln':   (14, 40, 80, 30, 70),   # 바이올린 (고음 이중)
 }
+# 일렉·신스 (battle·pinch 에서 첼로·바이올린 등 자리를 대신)
+BAND = {
+    'gtr':   (15, 30, 92, 24, 35),   # 디스토션 기타 (파워코드)
+    'ebass': (6, 34, 104, 64, 20),   # 일렉 베이스 (피크)
+    'lead':  (14, 81, 76, 100, 60),  # 신스 리드 (톱니파)
+    'arp':   (10, 80, 62, 88, 70),   # 신스 아르페지오 (사각파)
+    'spad':  (4, 90, 70, 64, 90),    # 신스 패드 (폴리신스)
+}
 KICK, SNARE, HAT, CRASH, RIDE, TOM_L, TOM_H = 36, 38, 42, 49, 51, 43, 50
 ACC = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0]  # 3+3+2 강세
 
 
 class Song:
-    def __init__(self, bpm):
+    def __init__(self, bpm, extra=None):
+        """extra: 이 곡에서만 쓰는 채널 {이름: (채널, 프로그램, 볼륨, 팬, 리버브)} — 같은 채널의 기본 악기를 대신한다"""
         self.bpm = bpm
+        extra = extra or {}
+        taken = {v[0] for v in extra.values()}
+        self.ch = {k: v for k, v in CH.items() if v[0] not in taken}
+        self.ch.update(extra)
         self.ev = []  # (tick, 순서, msg)
 
     def n(self, ch, at16, midi, len16, vel):
-        c = CH[ch][0]
+        c = self.ch[ch][0]
         t0 = int(round(at16 * T16))
         t1 = t0 + max(1, int(round(len16 * T16)) - 8)
         vel = max(1, min(127, int(vel)))
@@ -69,7 +82,7 @@ class Song:
         self.ev.append((t1, 0, mido.Message('note_off', channel=c, note=int(midi), velocity=0)))
 
     def cc(self, ch, at16, ctl, val):
-        self.ev.append((int(round(at16 * T16)), 0, mido.Message('control_change', channel=CH[ch][0], control=ctl, value=int(val))))
+        self.ev.append((int(round(at16 * T16)), 0, mido.Message('control_change', channel=self.ch[ch][0], control=ctl, value=int(val))))
 
     def ramp(self, ch, at16, len16, v0, v1, ctl=11):
         steps = max(1, int(len16))
@@ -81,7 +94,7 @@ class Song:
         tr = mido.MidiTrack()
         mid.tracks.append(tr)
         tr.append(mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(self.bpm), time=0))
-        for key, (c, prog, vol, pan, rev) in CH.items():
+        for key, (c, prog, vol, pan, rev) in self.ch.items():
             if c != 9:
                 tr.append(mido.Message('program_change', channel=c, program=prog, time=0))
             for ctl, val in ((7, vol), (10, pan), (91, rev), (93, 20), (11, 127)):
@@ -131,8 +144,37 @@ TPT_MEL = [
 OSTINATO = [0, 2, 1, 2, 0, 2, 1, 2, 0, 2, 1, 2, 0, 1, 2, 1]
 
 
+def power(name):
+    """기타 파워코드 (근음·5도·옥타브, 기타 음역)"""
+    r, _ = chord(name)
+    r = r if r >= 40 else r + 12
+    return [r, r + 7, r + 12]
+
+
+def gtr(s, b, name, vel, mode):
+    """chug: 8분음표 뮤트 · drive: 16분음표 질주 + 3+3+2 강세 · hold: 길게 울리기"""
+    pc = power(name)
+    if mode == 'hold':
+        for m in pc:
+            s.n('gtr', b * 16, m, 16, vel)
+        return
+    for k in range(16):
+        if mode == 'chug' and k % 2:
+            continue
+        accent = ACC[k]
+        for m in (pc if accent else pc[:2]):
+            s.n('gtr', b * 16 + k, m, 2 if accent else 0.8, vel + (14 if accent else -18))
+
+
+def synth_arp(s, b, name, vel, octave=5):
+    tn = tones(name, octave)
+    seq = [tn[0], tn[1], tn[2], tn[0] + 12, tn[2], tn[1]]
+    for k in range(16):
+        s.n('arp', b * 16 + k, seq[k % 6], 0.7, vel + (12 if k % 4 == 0 else 0))
+
+
 def battle():
-    s = Song(138)
+    s = Song(164, BAND)
     bar = 0
 
     def ostinato(b, name, vel, up=0):
@@ -158,15 +200,20 @@ def battle():
                 continue
             m = r + (12 if (i % 4 == 2 or i == 11) else 0)
             s.n('bass', b * 16 + i, m, 2 if not acc else 3, vel)
-            s.n('cello', b * 16 + i, m + 12, 2 if not acc else 3, vel - 10)
+            s.n('ebass', b * 16 + i, m, 2 if not acc else 3, vel)
 
     # 도입 4마디: 피아노 → 현악 → 팀파니 크레셴도 + 금관 스웰
     intro = ['Dm', 'Dm', 'Bb', 'A']
     for i, c in enumerate(intro):
         b = bar + i
-        piano_arp(b, c, 88)
+        piano_arp(b, c, 80)
+        synth_arp(s, b, c, 70 + i * 6)
         if i >= 1:
             ostinato(b, c, 60 + i * 8)
+            gtr(s, b, c, 84, 'chug') if i < 3 else gtr(s, b, c, 104, 'hold')
+        if i >= 2:
+            for k in range(0, 16, 4):
+                s.n('drums', b * 16 + k, KICK, 1, 100)
         r, _ = chord(c)
         s.n('bass', b * 16, r, 16, 80)
         s.n('timp', b * 16, r + 12 if r < 43 else r, 2, 90)
@@ -182,15 +229,20 @@ def battle():
     def section_a(b0, first):
         for i, c in enumerate(BATTLE_PROG):
             b = b0 + i
-            ostinato(b, c, 66)
-            piano_arp(b, c, 72)
-            bass8(b, c, 92)
+            ostinato(b, c, 62)
+            piano_arp(b, c, 66)
+            synth_arp(s, b, c, 58)
+            gtr(s, b, c, 86, 'chug')
+            bass8(b, c, 96)
             for st, m, ln in HORN_MEL[i]:
-                s.n('horn', b * 16 + st, m, ln, 100)
-                s.n('pad', b * 16 + st, m + 12, ln, 62)
-            for q in range(4):
-                s.n('drums', b * 16 + q * 4, KICK if q % 2 == 0 else SNARE, 1, 96 if q % 2 == 0 else 84)
-                s.n('drums', b * 16 + q * 4 + 2, HAT, 1, 60)
+                s.n('horn', b * 16 + st, m, ln, 104)
+                s.n('spad', b * 16 + st, m + 12, ln, 66)
+            for k in (0, 6, 8, 10):
+                s.n('drums', b * 16 + k, KICK, 1, 104)
+            for k in (4, 12):
+                s.n('drums', b * 16 + k, SNARE, 1, 100)
+            for k in range(0, 16, 2):
+                s.n('drums', b * 16 + k, HAT, 1, 70 if k % 4 == 0 else 54)
             if i % 2 == 0:
                 s.n('timp', b * 16, chord(c)[0] + (12 if chord(c)[0] < 41 else 0), 2, 96)
             if i == 0:
@@ -208,13 +260,15 @@ def battle():
         for i, c in enumerate(BATTLE_PROG):
             b = b0 + i
             r, _ = chord(c)
-            ostinato(b, c, 74, up=12 if i >= 4 else 0)
-            bass8(b, c, 104, acc=True)
+            ostinato(b, c, 70, up=12 if i >= 4 else 0)
+            bass8(b, c, 106, acc=True)
+            gtr(s, b, c, 96, 'drive')
+            synth_arp(s, b, c, 50, 6 if i >= 4 else 5)
             # 트럼펫 선율 + 트롬본 옥타브 아래, 바이올린 옥타브 위
             for st, m, ln in TPT_MEL[i]:
                 s.n('tpt', b * 16 + st, m, ln, 118)
                 s.n('tbn', b * 16 + st, m - 12, ln, 104)
-                s.n('vln', b * 16 + st, m + 12, ln, 78)
+                s.n('lead', b * 16 + st, m + 12, ln, 84)
             # 호른은 화음, 합창은 길게
             tn = tones(c, 4)
             for m in tn:
@@ -233,8 +287,9 @@ def battle():
                         s.n('timp', b * 16 + k, r + (12 if r < 41 else 0), 1, 100)
             for k in (4, 12):
                 s.n('drums', b * 16 + k, SNARE, 1, 104)
-            for k in range(1, 16, 2):
-                s.n('drums', b * 16 + k, HAT, 1, 56)
+            for k in range(0, 16, 2):
+                s.n('drums', b * 16 + k, RIDE, 1, 72 if k % 4 == 0 else 58)
+            s.n('drums', b * 16 + 15, KICK, 1, 90)
             if i in (0, 4):
                 s.n('drums', b * 16, CRASH, 8, 104)
                 s.n('hit', b * 16, tn[0] + 12, 2, 96)
@@ -270,8 +325,12 @@ PINCH_MEL = [
 ]
 
 
+PINCH_BAND = {k: BAND[k] for k in ('gtr', 'ebass', 'lead')}
+PINCH_BAND['sbass'] = (4, 38, 84, 64, 30)  # 신스 베이스 (16분음표 펄스)
+
+
 def pinch():
-    s = Song(156)
+    s = Song(184, PINCH_BAND)
     bar = 0
 
     def half(b0, melody):
@@ -285,10 +344,13 @@ def pinch():
             for k in range(0, 16, 2):
                 m = r + (12 if k % 8 == 6 else 0)
                 s.n('bass', b * 16 + k, m, 2, 104)
-                s.n('cello', b * 16 + k, m + 12, 2, 92)
+                s.n('ebass', b * 16 + k, m, 2, 104)
+            for k in range(16):
+                s.n('sbass', b * 16 + k, r + 12 + (12 if k % 4 == 2 else 0), 0.7, 70 + (20 if k % 4 == 0 else 0))
             for k in range(0, 16, 4):
                 s.n('timp', b * 16 + k, r + (12 if r < 41 else 0), 2, 104)
-                s.n('drums', b * 16 + k, KICK, 1, 108)
+            for k in range(0, 16, 2 if melody else 4):
+                s.n('drums', b * 16 + k, KICK, 1, 108 if k % 4 == 0 else 92)
             for k in (4, 12):
                 s.n('drums', b * 16 + k, SNARE, 1, 108)
             s.n('drums', b * 16 + 14, SNARE, 1, 60)
@@ -306,11 +368,14 @@ def pinch():
                     for m in tones(c, 3):
                         s.n('brass', b * 16 + k, m, 2, 108)
                     s.n('piano', b * 16 + k, r + 12, 2, 96)
+                    for m in power(c):
+                        s.n('gtr', b * 16 + k, m, 2, 108)
             else:
                 for st, m, ln in PINCH_MEL[i]:
                     s.n('tpt', b * 16 + st, m, ln, 120)
                     s.n('tbn', b * 16 + st, m - 12, ln, 104)
-                    s.n('vln', b * 16 + st, m + 12, ln, 70)
+                    s.n('lead', b * 16 + st, m + 12, ln, 80)
+                gtr(s, b, c, 98, 'drive')
                 for k in range(16):
                     s.n('stac', b * 16 + k, (tn[0] + 12) if k % 2 == 0 else tn[2], 1, 70 + (16 if k % 4 == 0 else 0))
                 for k in (0, 10):

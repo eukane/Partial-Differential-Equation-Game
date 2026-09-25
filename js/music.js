@@ -1,7 +1,7 @@
 /* 미분 배틀 배경음악
  * audio/*.mp3 는 tools/music/compose.py 로 작곡한 오리지널 곡을 실제 악기 샘플(FluidR3_GM 사운드폰트)로 렌더링한 것.
- *   battle  : 평소 전투 — 도입 → 호른 선율 → 트럼펫·트롬본·합창·팀파니가 터지는 격정 파트
- *   pinch   : 체력이 낮을 때 — 트레몰로 현악, 팀파니 연타, 트럼펫 고음 선율
+ *   battle  : 평소 전투 (164bpm) — 신스 도입 → 호른 선율 + 기타 뮤트 → 트럼펫·신스 리드·기타 질주·합창이 터지는 격정 파트
+ *   pinch   : 체력이 낮을 때 (184bpm) — 트레몰로 현악, 신스 베이스 펄스, 팀파니·기타 스탭, 트럼펫 고음 선율
  *   victory : 승리 팡파르
  * Web Audio 로 이어 붙여 반복(loopStart~loopEnd)하고, 곡을 바꿀 때는 겹쳐서 넘어간다.
  * 사용법: Music.play('battle' | 'pinch' | null), Music.victory(), Music.toggle()
@@ -12,11 +12,11 @@
   const VOL = 0.5;
   const FADE = 1.0;
   const BASE = 'audio/';
-  const VER = '?v=20260925-8';
+  const VER = '?v=20260925-9';
   // tools/music/out/loops.json 과 같은 값 (초)
   const LOOPS = {
-    battle: { loopStart: 34.78260869565217, loopEnd: 62.608695652173914 },
-    pinch: { loopStart: 24.615384615384617, loopEnd: 49.23076923076923 },
+    battle: { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },
+    pinch: { loopStart: 20.869565217391305, loopEnd: 41.73913043478261 },
     victory: null,
   };
 
