@@ -429,7 +429,7 @@
 
   const BGM_STYLES = {
     swing: { icon: '🎷', name: '일렉트로스윙', short: '🎷 스윙' },
-    swing2: { icon: '🚀', name: '쭉 뻗는 스윙 (임시)', short: '🚀 스윙B' },
+    swing2: { icon: '✨', name: '하이라이트 스윙 (임시)', short: '✨ 스윙B' },
     orch: { icon: '🎺', name: '오케스트라 록', short: '🎺 오케' },
   };
   function setBgm(st) {

@@ -349,89 +349,84 @@ def swing_battle():
     return {'loopStart': s.sec(loop_start), 'loopEnd': s.sec(loop_end)}
 
 
-# ---------------------------------------------------------------- swing2-battle (임시: 쭉 뻗어 나가는 버전)
-# 같은 그루브·펌핑 위에서: i–VI–III–VII (Am F C G) 로 계속 위로 들리는 진행, 길게 뻗으며 올라가는 트럼펫 선율,
-# 중간 스톱 대신 킥을 살린 채 밀고 가는 필, 최고조 드롭은 한 음(2반음) 올려서.
-SOAR = ['Am', 'F', 'C', 'G', 'Am', 'F', 'C', 'G E7']
-SOAR_MEL = [
-    [(0, 76, 3), (3, 81, 5)],
-    [(0, 84, 6), (6, 81, 1), (7, 84, 1)],
-    [(0, 88, 6), (6, 86, 1), (7, 84, 1)],
-    [(0, 86, 4), (4, 83, 2), (6, 79, 2)],
-    [(0, 81, 3), (3, 84, 3), (6, 88, 2)],
-    [(0, 89, 8)],
-    [(0, 88, 4), (4, 91, 4)],
-    [(0, 86, 4), (4, 88, 4)],
-]
+# ---------------------------------------------------------------- swing2-battle (임시: 고음 하이라이트 버전)
+# 레퍼런스처럼 선율(훅)이 높은 음역(C6~G6)에 살고, 최고조 전에 중저음을 비운 채 훅이 A6·C7 까지 치고 올라가는
+# '하이라이트' 구간을 거쳐 → 리프 + 고음 훅이 한꺼번에 터지는 최고조로.
+HOOK = {
+    1: [(0, 88, 2), (2, 93, 2), (4, 91, 1), (5, 88, 1), (6, 86, 1), (7, 84, 1)],
+    2: [(0, 86, 3), (3, 84, 1), (4, 81, 2), (6, 83, 1), (7, 84, 1)],
+    3: [(0, 88, 2), (2, 93, 2), (4, 96, 2), (6, 95, 1), (7, 93, 1)],
+    4: [(0, 90, 3), (3, 88, 1), (4, 92, 4)],
+    'peak': [(0, 93, 8)],
+}
+HL = dict(SWING, clar=(3, 72, 90, 70, 60))  # 클라리넷 자리에 피콜로
 
 
-def push_fill(s, b):
-    """킥은 그대로 두고 뒤 반 마디를 스네어 16분 → 탐으로 밀어 올리는 필 + 라이저"""
-    s.n('riser', b * 16, 60, 16, 104)
-    for k in range(8):
-        n = SNARE if k < 5 else (TOM_H, TOM_M, TOM_L)[k - 5]
-        s.n('drums', b * 16 + 8 + k, n, 1, 84 + k * 5)
-
-
-def swing_soar():
-    s = Song(140, SWING)
+def swing_highlight():
+    s = Song(140, HL)
+    picc = 'clar'
     bar = 0
-    # 도입 4마디: Am F C G 위로 금관 콜 & 리스폰스 + 패드가 점점 부풀기
-    for i, c in enumerate(SOAR[:4]):
+    # 도입: 고음 훅을 피콜로 + 약음기 트럼펫(옥타브 아래)으로 먼저 들려준다
+    for i, (c, h) in enumerate(zip(HALF, (1, 2, 1, 4))):
         b = bar + i
         rhythm(s, b, c, 0)
         pad_and_piano(s, b, c, 1)
         groove_extras(s, b, i)
-        r, _ = chord(c)
-        if i % 2 == 0:
-            play_line(s, 'sax', b, call(r), 104)
-            play_line(s, 'mute', b, call(r), 96, 12)
-        else:
-            answer(s, b, c, 104)
-        for m in tones(c, 4):
-            s.n('spad', b * 16, m, 16, 60 + i * 8)
+        play_line(s, picc, b, HOOK[h], 92)
+        play_line(s, 'mute', b, HOOK[h], 80, -12)
+        s.n('tbn', b * 16, bass_of(c) + 12, 3, 88)
         for q in range(4):
             s.n('drums', b * 16 + q * 4 + 2, OHAT, 1, 54)
     s.n('drums', 0, CRASH, 12, 96)
     run16(s, 'piano', 0, 0, [57, 60, 64, 69, 72, 76, 81, 84], 84)
     bar += 4
-    # 빌드업 4마디: 킥 4박, 트럼펫이 한 마디에 한 음씩 길게 올라간다 (E → F → G → A), 마지막 스톱 + '팡' 준비
-    climb = [76, 77, 79, 81]
-    for i, c in enumerate(SOAR[4:]):
+    # 빌드업 (지금 스윙과 같음)
+    for i, c in enumerate(PROG[4:]):
         b = bar + i
         last = i == 3
         rhythm(s, b, c, 1, stop=last)
         pad_and_piano(s, b, c, 1)
         groove_extras(s, b, i, claps=not last)
-        s.n('tpt', b * 16, climb[i], 16 if not last else 8, 96 + i * 6)
-        s.n('sax', b * 16, climb[i] - 12, 16 if not last else 8, 88 + i * 6)
-        for m in tones(bar_chords(c)[0][1], 4):
-            s.n('spad', b * 16, m, 16 if not last else 8, 76)
+        r, _ = chord(bar_chords(c)[0][1])
+        line = call(r) if not last else call(r)[:2]
+        play_line(s, 'tpt', b, line, 100)
+        play_line(s, 'sax', b, line, 96, -12)
         if i % 2 == 1 and not last:
             charleston(s, b, c, 100)
+        for m in tones(bar_chords(c)[0][1], 4):
+            s.n('spad', b * 16, m, 16 if not last else 8, 70)
+    s.n('drums', bar * 16, CRASH, 8, 100)
     build_up(s, bar + 3)
     bar += 4
     loop_start = bar
 
-    def soar_drop(b0, big):
-        for i, c in enumerate(SOAR):
+    def drop(b0, climax):
+        hooks = (1, 2, 1, 4, 1, 2, 3, None)
+        for i, c in enumerate(PROG):
             b = b0 + i
-            rhythm(s, b, c, 2)
+            last = i == 7
+            rhythm(s, b, c, 2, stop=last)
             pad_and_piano(s, b, c, 2)
-            line = SOAR_MEL[i]
-            play_line(s, 'tpt', b, line, 118)
-            play_line(s, 'lead', b, line, 80)
-            play_line(s, 'sax', b, line, 104, -12)
-            play_line(s, 'tbn', b, [(0, bass_of(bar_chords(c)[0][1]) + 24, 8)], 88)
-            charleston(s, b, c, 104 if big else 96)
-            groove_extras(s, b, i, claps=False)
-            if big and i >= 4:
+            play_line(s, 'sax', b, RIFF[i], 116)
+            play_line(s, 'tpt', b, RIFF[i], 104)
+            play_line(s, 'tbn', b, [(e, m - 12, ln) for e, m, ln in RIFF[i]], 92)
+            if climax and hooks[i]:
+                # 최고조: 리프 위로 고음 훅이 같이 (피콜로 + 톱니파 리드)
+                play_line(s, picc, b, HOOK[hooks[i]], 110)
+                play_line(s, 'lead', b, HOOK[hooks[i]], 82)
+            else:
+                play_line(s, 'lead', b, RIFF[i], 76, 12 if i % 2 else 0)
+            if not last:
+                charleston(s, b, c, 110 if climax else 102)
+                groove_extras(s, b, i, claps=False)
+            if climax and not last:
                 for q in range(4):
                     s.n('drums', b * 16 + q * 4, CLAP, 1, 98)
             if i == 4:
                 s.n('drums', b * 16, CRASH, 8, 112)
                 s.n('hit', b * 16, tones(c, 4)[0] + 12, 2, 110)
-        slam(s, b0, SOAR[0], big)
+        slam(s, b0, PROG[0], climax)
+        build_up(s, b0 + 7)
 
     def solo(b0):
         for i, c in enumerate(SOLO_PROG):
@@ -449,35 +444,63 @@ def swing_soar():
             if i % 4 == 0:
                 s.n('drums', b * 16, CRASH, 8, 100)
         slam(s, b0, SOLO_PROG[0])
+        s.n('riser', (b0 + 7) * 16, 60, 16, 110)
+        for k in range(8, 15):
+            s.n('drums', (b0 + 7) * 16 + k, SNARE, 1, 80 + k * 3)
+
+    def highlight(b0):
+        """하이라이트 8마디: 중저음은 비우고(콘트라베이스·기타 없이 신스 베이스만 박에), 훅이 고음으로 치고 올라간다.
+        박수·킥이 마디마다 촘촘해지고, 7마디째 A6 를 길게 → 8마디째 스톱 + 라이저"""
+        hooks = (1, 2, 1, 4, 3, 2, 'peak', None)
+        for i, c in enumerate(PROG):
+            b = b0 + i
+            last = i == 7
+            names = [n for _, n in bar_chords(c)]
+            for q in range(4):
+                at = b * 16 + q * 4
+                if last and q >= 2:
+                    continue
+                s.n('sbass', at, bass_of(names[q]), 2, 96)
+                if i >= 2 or q % 2 == 0:
+                    s.n('drums', at, KICK, 1, 100 + i * 3)
+                s.n('drums', at + 2, OHAT, 1, 70 + i * 5)
+                if i < 4:
+                    if q % 2:
+                        s.n('drums', at, CLAP, 1, 90)
+                else:
+                    s.n('drums', at, CLAP, 1, 90 + i * 2)
+                    if i >= 5:
+                        s.n('drums', at + 8 / 3, CLAP, 1, 70 + i * 4)
+            # 가운데는 피아노 컴핑·기타 2·4박으로 가볍게 채운다 (너무 비면 앙상해서)
+            pad_and_piano(s, b, c, 1)
+            for q in (1, 3):
+                if not (last and q == 3):
+                    for m in tones(names[q], 3)[1:]:
+                        s.n('pompe', b * 16 + q * 4, m + 12, 0.9, 88)
+            for m in tones(names[0], 4):
+                s.n('horn' if 'horn' in s.ch else 'brass', b * 16, m, 16 if not last else 8, 50 + i * 5)
+            # 높이 깔리는 패드가 점점 커진다
+            for m in tones(names[0], 5):
+                s.n('spad', b * 16, m, 16 if not last else 8, 60 + i * 7)
+            if hooks[i]:
+                play_line(s, picc, b, HOOK[hooks[i]], 104 + i * 2)
+                play_line(s, 'lead', b, HOOK[hooks[i]], 72 + i * 3)
+                play_line(s, 'tpt', b, HOOK[hooks[i]], 84 + i * 3, -12)
+            # 금관은 가끔 높은 화음으로 '빠-' 하고 받쳐 줄 뿐
+            if i in (1, 3, 5):
+                for m in tones(names[0], 5)[:3]:
+                    s.n('brass', b * 16 + 8, m, 6, 88)
+        s.n('drums', b0 * 16, CRASH, 12, 100)
+        s.n('drums', (b0 + 4) * 16, CRASH, 8, 104)
         build_up(s, b0 + 7)
 
-    def breakdown(b0):
-        # 브레이크다운도 위로: Am F C G, 트럼펫이 높은 음을 길게 → 4마디째 킥 채운 채 밀어 올리기
-        for i, c in enumerate(SOAR[:4]):
-            b = b0 + i
-            rhythm(s, b, c, 1, kick=(i >= 2), hats=False)
-            pad_and_piano(s, b, c, 1)
-            groove_extras(s, b, i)
-            s.n('tpt', b * 16, [81, 84, 88, 86][i], 16, 92 + i * 6)
-            s.n('lead', b * 16, [81, 84, 88, 86][i], 16, 60 + i * 6)
-            for m in tones(c, 4):
-                s.n('spad', b * 16, m, 16, 74)
-        s.n('drums', b0 * 16, CRASH, 12, 90)
-        push_fill(s, b0 + 3)
-
-    soar_drop(bar, False)
-    push_fill(s, bar + 7)
-    bar += 8
+    drop(bar, False); bar += 8
     solo(bar); bar += 8
-    breakdown(bar); bar += 4
-    s.tp = 2  # 최고조: 한 음 올려서 (B단조)
-    soar_drop(bar, True)
-    build_up(s, bar + 7)
-    s.tp = 0
-    bar += 8
+    highlight(bar); bar += 8
+    drop(bar, True); bar += 8
     loop_end = bar
-    rhythm(s, bar, SOAR[0], 2)
-    slam(s, bar, SOAR[0])
+    rhythm(s, bar, PROG[0], 2)
+    slam(s, bar, PROG[0])
     s.save('swing2-battle', stems=True)
     return {'loopStart': s.sec(loop_start), 'loopEnd': s.sec(loop_end)}
 
@@ -577,7 +600,7 @@ def swing_victory():
 
 def main():
     return {'swing-battle': swing_battle(), 'swing-pinch': swing_pinch(), 'swing-victory': swing_victory(),
-            'swing2-battle': swing_soar()}  # 임시 버전 (위기 테마·승리는 swing 과 같이 씀)
+            'swing2-battle': swing_highlight()}  # 임시 버전 (위기 테마·승리는 swing 과 같이 씀)
 
 
 if __name__ == '__main__':
