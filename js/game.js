@@ -138,8 +138,8 @@
   const at = (x, y, except) => S.players.find(p => p.alive && p !== except && p.x === x && p.y === y) || null;
   const dirIdx = (dx, dy) => DIRS.findIndex(d => d[0] === dx && d[1] === dy);
   /** 내가 조작하는 말인가 (턴제: 내 차례, 난전: 내가 살아 있음) */
-  const myTurn = () => !S.online || (S.mode === 'brawl'
-    ? !!(S.players[S.online.mySeat] && S.players[S.online.mySeat].alive)
+  const myTurn = () => (!S.online ? !(S.players[S.turn] && S.players[S.turn].bot)
+    : S.mode === 'brawl' ? !!(S.players[S.online.mySeat] && S.players[S.online.mySeat].alive)
     : S.online.mySeat === S.turn);
   /** 지금 행동 버튼을 누를 수 있는가 */
   const canAct = () => (S.mode === 'brawl'
@@ -179,7 +179,24 @@
       <div class="setup-row" style="--pc:${p.color}" data-row="${i}">
         <span>${p.emoji}</span>
         <input id="pname${i}" maxlength="10" value="${p.name}" aria-label="플레이어 ${i + 1} 이름">
+        <button class="bot-btn" data-bot="${i}" aria-label="플레이어 ${i + 1} 사람/AI 바꾸기"></button>
       </div>`).join('');
+    // 자리마다 👤 사람 / 🤖 AI (기억해 둔다, 1번 자리는 기본 사람)
+    S.localBots = new Set((store.get('pdeb-bots') || []).filter(i => i >= 0 && i < MAX_PLAYERS));
+    const renderBots = () => document.querySelectorAll('[data-bot]').forEach(b => {
+      const on = S.localBots.has(+b.dataset.bot);
+      b.textContent = on ? '🤖 AI' : '👤 사람';
+      b.classList.toggle('on', on);
+    });
+    document.querySelectorAll('[data-bot]').forEach(b => {
+      b.onclick = () => {
+        const i = +b.dataset.bot;
+        if (S.localBots.has(i)) S.localBots.delete(i); else S.localBots.add(i);
+        store.set('pdeb-bots', [...S.localBots]);
+        renderBots();
+      };
+    });
+    renderBots();
     const setCount = n => {
       S.localCount = n;
       document.querySelectorAll('.count-btn').forEach(b => b.classList.toggle('sel', +b.dataset.n === n));
@@ -320,19 +337,19 @@
   }
 
   /** i 번째 플레이어 (전체 n명). 처음에는 판 가운데를 바라본다 */
-  function makePlayer(i, name, n) {
+  function makePlayer(i, name, n, bot = false) {
     const p = PRESETS[i];
     const [x, y] = (LAYOUTS[n] || LAYOUTS[3])[i];
     setBoard(n);
     const ang = Math.round(normAng(Math.atan2(3.5 - x, -(3.5 - y)) * 180 / Math.PI) / 5) * 5;
     return { id: i, name, color: p.color, emoji: p.emoji, x, y, ang, style: null,
-      hp: S.maxHp, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0 };
+      hp: S.maxHp, alive: true, shield: false, power: false, correct: 0, tries: 0, score: 0, bot: !!bot };
   }
 
   function startGame() {
     S.online = null;
     const n = S.localCount || 3;
-    S.players = PRESETS.slice(0, n).map((p, i) => makePlayer(i, ($(`#pname${i}`).value || p.name).trim() || p.name, n));
+    S.players = PRESETS.slice(0, n).map((p, i) => makePlayer(i, ($(`#pname${i}`).value || p.name).trim() || p.name, n, S.localBots && S.localBots.has(i)));
     S.timer = $('#optTimer').checked;
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     S.gseed = newSeed();
@@ -443,7 +460,7 @@
       <div class="pcard ${p === cur() && S.phase !== 'over' ? 'active' : ''} ${p.alive ? '' : 'dead'}" style="--pc:${p.color}">
         <span class="pemoji">${p.emoji}</span>
         <div class="pinfo">
-          <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
+          <div class="pname">${esc(p.name)}${S.online && S.online.mySeat === p.id ? ' <span class="chip me">나</span>' : ''} ${p.shield ? '🛡️' : ''}${p.power ? '💥' : ''}${p.bot ? ' <span class="chip bot">AI</span>' : ''}${S.online && !Net.seatOnline(p.id) ? ' <span class="chip off">연결 끊김</span>' : ''}</div>
           <div class="hp"><div class="hp-fill" style="width:${p.hp / S.maxHp * 100}%"></div></div>
           ${brawl() && S.online && p.alive && p.id !== S.online.mySeat && Net.seatStatus(p.id) ? `<div class="pdoing">${esc(Net.seatStatus(p.id))}</div>` : ''}
         </div>
@@ -491,9 +508,9 @@
       el.turnPanel.innerHTML = head + `
         <div class="waiting">
           <span class="dots"><i></i><i></i><i></i></span>
-          <span>${S.phase === 'busy' && S.applying ? '행동 진행 중…' : doing ? esc(doing) : `${esc(p.name)} 님이 고르는 중…`}</span>
+          <span>${S.phase === 'busy' && S.applying ? '행동 진행 중…' : p.bot ? `🤖 ${esc(S.botStatus || '생각 중…')}` : doing ? esc(doing) : `${esc(p.name)} 님이 고르는 중…`}</span>
         </div>
-        <p class="hint">내 차례가 되면 여기에 행동 버튼이 나타나요.</p>`;
+        <p class="hint">${p.bot ? 'AI 가 알아서 문제를 풀고 행동해요.' : '내 차례가 되면 여기에 행동 버튼이 나타나요.'}</p>`;
       return;
     }
 
@@ -694,8 +711,16 @@
   //  턴 진행
   // ------------------------------------------------------------------
   function showHandover() {
-    S.phase = 'handover';
     const p = cur();
+    if (p && p.bot) {
+      el.handover.classList.add('hidden');
+      S.phase = 'choose';
+      renderAll();
+      toast(`🤖 ${p.emoji} ${p.name} 차례`);
+      scheduleBot();
+      return;
+    }
+    S.phase = 'handover';
     renderAll();
     el.handover.innerHTML = `
       <div class="card small handover-card" style="--pc:${p.color}">
@@ -744,12 +769,14 @@
       renderAll();
       toast('🔥 난전 시작! 문제를 맞히는 대로 바로 행동하세요');
       maybeAugment();
+      startBrawlBots();
       return;
     }
     renderAll();
     const p = cur();
-    toast(myTurn() ? '🔔 내 차례!' : `${p.emoji} ${p.name} 차례`);
+    toast(myTurn() ? '🔔 내 차례!' : `${p.bot ? '🤖 ' : ''}${p.emoji} ${p.name} 차례`);
     maybeAugment();
+    scheduleBot();
   }
 
   function checkWin() {
@@ -862,6 +889,149 @@
       const btns = c.querySelectorAll('[data-s]');
       if (i >= 0 && btns[i]) btns[i].click();
     };
+  }
+
+  // ------------------------------------------------------------------
+  //  🤖 AI 플레이어 — 한 기기 모드는 이 화면이, 온라인은 방장 화면이 대신 두고
+  //  사람과 똑같은 act 로 보낸다 (그래서 모든 화면에서 같은 결과가 재생된다)
+  // ------------------------------------------------------------------
+  const BOT_NAMES = ['AI 알파', 'AI 베타', 'AI 감마', 'AI 델타', 'AI 오메가'];
+  const BOT_ACC = { easy: 0.85, hard: 0.65, killer: 0.45 };      // 난이도별 정답률
+  const BOT_LEVEL = [['easy', 0.45], ['hard', 0.35], ['killer', 0.2]];
+  const botAuthority = () => !S.online || S.online.host;
+  const chance = r => Math.random() < r;
+  const pickW = list => { let r = Math.random() * list.reduce((t, x) => t + x[1], 0); for (const x of list) { r -= x[1]; if (r < 0) return x[0]; } return list[0][0]; };
+
+  /** 이 자리에서 지금 공격하면 얼마나 좋은가: {score, ang, tgt}. 맞는 적 1명 = 1, 자기가 맞으면 -1.5 */
+  function botBestAttack(p) {
+    const style = p.style;
+    if (!style) return { score: 0 };
+    const s = STYLES[style];
+    const count = plan => {
+      let v = 0;
+      const seen = new Map();
+      for (const r of plan.rays) for (const h of r.hits) seen.set(h.q, (seen.get(h.q) || 0) + 1);
+      for (const [x, y, w] of plan.cells) { const q = at(x, y); if (q) seen.set(q, (seen.get(q) || 0) + w); }
+      for (const [q, n] of seen) v += q === p ? -1.5 * n : Math.min(n, 2) * (q.hp <= 40 ? 1.3 : 1);
+      return v;
+    };
+    if (style === 'knight') {
+      let best = { score: 0 };
+      for (const [x, y] of knightCells(p)) {
+        const v = enemies(p).filter(q => Math.max(Math.abs(q.x - x), Math.abs(q.y - y)) === 1).length;
+        if (v > best.score) best = { score: v, tgt: [x, y] };
+      }
+      return best;
+    }
+    if (style === 'mortar') {
+      let best = { score: 0 };
+      for (const t of mortarCells(p)) {
+        const v = count(planAttack(p, style, t));
+        if (v > best.score) best = { score: v, tgt: t };
+      }
+      return best;
+    }
+    if (style === 'scatter') return { score: 0.6, ang: p.ang };   // 운에 맡기는 한 방
+    if (!s.aim) return { score: count(planAttack(p, style, null)), ang: p.ang };
+    const a0 = p.ang;
+    let best = { score: 0, ang: a0 };
+    for (let a = 0; a < 360; a += 5) {
+      p.ang = a;
+      const v = count(planAttack(p, style, null));
+      if (v > best.score) best = { score: v, ang: a };
+    }
+    p.ang = a0;
+    return best;
+  }
+
+  /** AI 가 다음에 할 행동 (act) 을 정한다 */
+  function botDecide(p) {
+    if (!p.style) {
+      const offers = offersFor(p);
+      return { key: 'pick', style: offers[Math.floor(Math.random() * offers.length)] };
+    }
+    const level = pickW(BOT_LEVEL);
+    const L = LEVELS[level];
+    const ok = chance(BOT_ACC[level]);
+    const sec = Math.round(L.time * (0.15 + Math.random() * 0.55) * 10) / 10;
+    const fast = ok && sec <= L.time * FAST_RATIO;
+    const cat = CAT_KEYS[Math.floor(Math.random() * CAT_KEYS.length)];
+    const act = { cat, level, ok, topic: window.MathProblems.generate(cat, level).topic, to: 0, fast: fast ? 1 : 0,
+      pts: ok ? L.pts + Math.round(100 * Math.max(0, 1 - sec / L.time)) : 0, sec, ang: p.ang };
+    const canAttack = brawl() || !(prepRound() || S.extraActive);
+    const atk = canAttack ? botBestAttack(p) : { score: 0 };
+    const low = p.hp <= S.maxHp * 0.35;
+    if (atk.score >= 1 && !(low && atk.score < 1.5 && chance(0.3))) {
+      act.key = 'attack';
+      if (atk.ang != null) act.ang = atk.ang;
+      if (atk.tgt) act.tgt = atk.tgt;
+      return act;
+    }
+    if (low && chance(0.45)) { act.key = 'box'; return act; }
+    // 이동: 옮겨 간 자리에서 공격하기 좋은 칸 (체력이 낮으면 적과 멀리, 아니면 가까이)
+    const range = MOVE_RANGE[level] + (fast ? 1 : 0);
+    const x0 = p.x, y0 = p.y;
+    const dist = () => Math.min(...enemies(p).map(q => Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y))), 99);
+    let best = null;
+    for (const [x, y] of moveCells(p, range)) {
+      p.x = x; p.y = y;
+      const v = botBestAttack(p).score * 2 + (low ? dist() * 0.15 : -dist() * 0.15)
+        + ((S.coins || []).some(c => c[0] === x && c[1] === y) ? 0.3 : 0) + Math.random() * 0.2;
+      if (!best || v > best.v) best = { v, dest: [x, y] };
+    }
+    p.x = x0; p.y = y0;
+    if (!best || chance(0.15)) { act.key = 'box'; return act; }
+    act.key = 'move';
+    act.dest = best.dest;
+    return act;
+  }
+
+  /** 턴제: 지금 차례가 AI 면 조금 뒤에 한 수 둔다 (추가 행동이면 또) */
+  function scheduleBot() {
+    clearTimeout(S.botTimer);
+    if (!botAuthority() || brawl()) return;
+    const p = cur();
+    if (!p || !p.bot || !p.alive || S.phase !== 'choose') return;
+    const token = S.botToken = (S.botToken || 0) + 1;
+    S.botTimer = setTimeout(() => botTurn(token), 900);
+  }
+
+  async function botTurn(token) {
+    const p = cur();
+    if (token !== S.botToken || !p || !p.bot || !p.alive || S.phase !== 'choose' || !botAuthority() || brawl()) return;
+    if (S.applying) { S.botTimer = setTimeout(() => botTurn(token), 300); return; }
+    const act = botDecide(p);
+    if (act.key !== 'pick') {
+      const info = actionInfo(act.key, p);
+      S.botStatus = `${info.icon} ${info.name} · ${LEVELS[act.level].label} 문제 푸는 중…`;
+      renderTurn();
+      // 조준을 먼저 돌려서 무엇을 노리는지 보여 준다
+      if (act.key === 'attack' && act.ang != null) { p.ang = act.ang; renderAll(); }
+      await sleep(900 + Math.random() * 1400);
+      if (token !== S.botToken || cur() !== p || S.phase !== 'choose') return;
+      S.botStatus = '';
+    }
+    submit(act);
+  }
+
+  /** 난전: 방장 화면이 AI 들을 각자 시계대로 움직인다 */
+  function startBrawlBots() {
+    clearInterval(S.brawlBotTimer);
+    if (!S.online || !S.online.host || !brawl()) return;
+    S.botClock = {};
+    S.brawlBotTimer = setInterval(() => {
+      if (!S.online || !brawl() || S.phase === 'over' || S.online.phase !== 'game') { clearInterval(S.brawlBotTimer); return; }
+      const now = Date.now();
+      S.players.forEach((p, seat) => {
+        if (!p.bot || !p.alive) return;
+        const c = S.botClock[seat] || (S.botClock[seat] = { at: now + 1500 + Math.random() * 2500 });
+        if (now < c.at || c.waiting) return;
+        const act = botDecide(p);
+        // 푼 시간만큼 기다렸다가 내고, 오답이면 사람처럼 쉬는 시간
+        c.at = now + (act.key === 'pick' ? 800 : Math.min(act.sec * 1000 * 0.5, 9000) + 1500 + (act.ok ? 0 : BRAWL_LOCK_MS));
+        Net.botSubmit(act, seat);
+      });
+    }, 500);
   }
 
   // ---------------- 자유 조준 (무료) ----------------
@@ -1034,6 +1204,7 @@
       rng = Math.random;
       S.applying = false;
       Net.afterApply();
+      scheduleBot();
     }
   }
 
@@ -1908,6 +2079,7 @@
     seatOnline(i) {
       if (!S.online) return true;
       if (i === S.online.mySeat) return true;
+      if (S.online.seats[i] && S.online.seats[i].b) return true;
       return !!this.peerOfSeat(i);
     },
     seatStatus(i) {
@@ -2083,7 +2255,7 @@
       }
       this.hostMissingSince = 0;
       const h = hp.presence;
-      o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, MAX_PLAYERS).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어' }));
+      o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, MAX_PLAYERS).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어', b: x && x.b ? 1 : 0 }));
       o.mySeat = o.seats.findIndex(x => x.k === this.myKey());
       o.timer = !!h.tm;
       o.mode = h.md === 'brawl' ? 'brawl' : 'turn';
@@ -2152,6 +2324,12 @@
       setTimeout(retry, 5000);
     },
 
+    /** 방장: AI 자리의 행동을 그 자리 이름으로 줄에 세운다 */
+    botSubmit(a, seat) {
+      this.queue = this.queue || [];
+      this.queue.push({ ...a, actor: seat, n: 1 + Math.floor(Math.random() * 1e9) });
+      this.pump();
+    },
     brawlSubmit(a) {
       const o = S.online;
       const n = 1 + Math.floor(Math.random() * 1e9);
@@ -2181,7 +2359,7 @@
       const o = S.online;
       S.timer = o.timer;
       S.maxHp = o.hp || DEFAULT_HP;
-      S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length));
+      S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length, !!x.b));
       S.mode = o.mode === 'brawl' ? 'brawl' : 'turn';
       S.myBusy = false; S.lockUntil = 0; S.localAim = null;
       S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
@@ -2206,10 +2384,15 @@
             const n = cleanText(p.presence.nick, 10) || '플레이어';
             if (seat) { if (seat.n !== n) { seat.n = n; changed = true; } }
             else if (o.seats.length < MAX_PLAYERS) { o.seats.push({ k, n }); changed = true; }
+            else {
+              // 자리가 다 찼어도 AI 자리가 있으면 사람에게 내준다
+              const bi = o.seats.map(x => !!x.b).lastIndexOf(true);
+              if (bi > 0) { o.seats[bi] = { k, n }; changed = true; }
+            }
           }
           // 로비에서 나간 사람은 자리에서 뺀다
           const keys = new Set(here.map(p => this.keyOf(p)));
-          const kept = o.seats.filter((x, i) => i === 0 || keys.has(x.k));
+          const kept = o.seats.filter((x, i) => i === 0 || x.b || keys.has(x.k));
           if (kept.length !== o.seats.length) { o.seats = kept; changed = true; }
           if (changed) this.publish();
           renderLobby();
@@ -2269,7 +2452,9 @@
       return `<li class="seat ${x ? 'filled' : ''}" style="--pc:${pr.color}">
         <span class="seat-emoji">${x ? pr.emoji : '·'}</span>
         <span class="seat-name">${x ? esc(x.n) : '빈 자리'}</span>
-        ${x && i === 0 ? '<span class="chip host">방장</span>' : ''}${me ? '<span class="chip me">나</span>' : ''}
+        ${x && i === 0 ? '<span class="chip host">방장</span>' : ''}${me ? '<span class="chip me">나</span>' : ''}${x && x.b ? '<span class="chip bot">AI</span>' : ''}
+        ${o.host && x && x.b ? `<button class="seat-x" data-unbot="${i}" aria-label="AI 빼기">✕</button>` : ''}
+        ${o.host && !x && i === o.seats.length ? '<button class="seat-add" id="btnAddBot">🤖 AI 넣기</button>' : ''}
       </li>`;
     }).join('');
     const waitingHost = !o.host && o.phase === 'joining';
@@ -2291,7 +2476,7 @@
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
           : full ? '자리가 다 찼어요. 게임이 시작되면 관전할 수 있어요.'
-          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… (2~5명, 5명이면 오각형 판)' : `${o.seats.length}명 모였어요. 시작할 수 있어요.`)
+          : o.host ? (o.seats.length < 2 ? '친구가 들어오길 기다리는 중… 빈 자리에 🤖 AI 를 넣을 수도 있어요. (2~5명, 5명이면 오각형 판)' : `${o.seats.length}명 모였어요. 시작할 수 있어요. (빈 자리에 🤖 AI 를 넣을 수 있어요)`)
           : '방장이 시작하길 기다리는 중…'}</p>
         ${o.host ? `<button class="primary big" id="btnBegin" ${o.seats.length < 2 ? 'disabled' : ''}>게임 시작 ▶</button>` : ''}
         <button class="ghost wide" id="btnLobbyLeave">나가기</button>
@@ -2307,6 +2492,20 @@
     }
     const begin = $('#btnBegin');
     if (begin) begin.onclick = () => Net.startGame();
+    const addBot = $('#btnAddBot');
+    if (addBot) {
+      addBot.onclick = () => {
+        if (o.seats.length >= MAX_PLAYERS) return;
+        const used = new Set(o.seats.map(x => x.n));
+        const n = BOT_NAMES.find(b => !used.has(b)) || 'AI';
+        o.seats.push({ k: 'bot:' + newSeed(), n, b: 1 });
+        Net.publish();
+        renderLobby();
+      };
+    }
+    el.lobby.querySelectorAll('[data-unbot]').forEach(b => {
+      b.onclick = () => { o.seats.splice(+b.dataset.unbot, 1); Net.publish(); renderLobby(); };
+    });
     el.lobby.querySelectorAll('[data-mode]').forEach(b => {
       b.onclick = () => { o.mode = b.dataset.mode; Net.publish(); renderLobby(); };
     });
@@ -2328,6 +2527,7 @@
         <h3>턴 진행</h3>
         <ul>
           <li>첫 차례에 <b>증강</b>을 고릅니다. 무작위 공격 스타일 ${OFFER_N}개 중 하나를 골라 게임 끝까지 씁니다.</li>
+          <li><b>🤖 AI</b>: 한 기기 모드는 자리마다 👤/🤖 를 눌러, 온라인은 방장이 대기실 빈 자리에 <b>🤖 AI 넣기</b>로 채웁니다. AI 도 문제를 풀어(기본 85% · 심화 65% · 킬러 45% 정답) 공격·이동·랜덤박스를 해요.</li>
           <li><b>조준은 무료</b>입니다. 판 위의 칸을 누르면 그 칸을 조준하고, 버튼으로 5°·15°씩 미세 조정할 수 있어요.</li>
           <li>공격·이동·랜덤박스 중 하나를 고르고, <b>과목</b>(공통·미적분·확률과 통계·기하)과 <b>난이도</b>(기본·심화·🔥킬러)를 골라 문제를 풉니다. 맞히면 실행, 틀리면 턴 종료.</li>
           <li><b>턴제</b>: 항상 1번 → 2번 → … 순서대로 돌아가요. 1라운드는 <b>준비 라운드</b>라 공격할 수 없고(이동·랜덤박스·증강만), 추가 행동으로는 공격할 수 없어요.</li>

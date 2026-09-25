@@ -356,6 +356,12 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .chip.me { background: #2b3f7a; color: #cfe0ff; }
 .chip.host { background: #5a4a10; color: #ffe38a; }
 .chip.off { background: #4a2330; color: #ffb3c0; }
+.chip.bot { background: #213f3a; color: #9ff0d8; }
+.bot-btn { flex: none; padding: 6px 10px; font-size: .82rem; border-radius: 999px; white-space: nowrap; }
+.setup-row input { min-width: 0; }
+.bot-btn.on { background: #213f3a; border-color: #3fbf9a; color: #9ff0d8; }
+.seat-x { flex: none; padding: 2px 9px; font-size: .8rem; border-radius: 999px; }
+.seat-add { flex: none; padding: 4px 10px; font-size: .8rem; border-radius: 999px; background: #213f3a; border-color: #3fbf9a; color: #9ff0d8; }
 
 .lobby-card { display: flex; flex-direction: column; gap: 12px; text-align: center; }
 .eyebrow { margin: 0; font-size: .75rem; letter-spacing: .12em; color: var(--muted); }
