@@ -1,4 +1,6 @@
-# ∂ 미분 배틀 (Partial Differential Equation Game)
+# ∑ 수학 배틀
+
+(예전 이름: ∂ 미분 배틀 · 저장소 이름 Partial-Differential-Equation-Game)
 
 고3 수학 문제를 맞혀서 공격하고, 이동하고, 살아남는 **2~5인 턴제 보드게임**입니다. (5명이면 오각형 판)
 한 기기에서 번갈아 하거나, 방 코드로 친구를 초대해 온라인으로 할 수 있습니다.
