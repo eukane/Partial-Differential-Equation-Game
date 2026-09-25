@@ -46,7 +46,7 @@
 <main>
   <h1>🎨 직업 캐릭터 19종</h1>
   <p class="sub">코드로 그린 벡터 캐릭터 (2등신 SD). 머리·몸·팔·무기를 따로 그려서 부위별로 움직여요.<br>
-    버튼으로 동작을 바꿔 보고, 색을 눌러 플레이어 색이 어디에 들어가는지 확인해 보세요. 맨 아래는 실제 게임 판 크기(휴대폰 기준)예요.</p>
+    버튼으로 동작을 바꿔 보고 (🔊 공격·맞음은 소리도 나요), 색을 눌러 플레이어 색이 어디에 들어가는지 확인해 보세요. 맨 아래는 실제 게임 판 크기(휴대폰 기준)예요.</p>
 
   <p><button id="allAtk">⚔️ 모두 공격</button></p>
   <div class="grid" id="cards"></div>
@@ -59,7 +59,8 @@
   </section>
 </main>
 
-<script src="../js/chars.js?v=20260925-28"></script>
+<script src="../js/sfx.js?v=20260925-30"></script>
+<script src="../js/chars.js?v=20260925-30"></script>
 <script>
 const NAMES = { sniper: ['🎯', '저격'], shotgun: ['💥', '산탄'], ricochet: ['🌀', '도탄'], bishop: ['✖️', '비숍'], rook: ['➕', '룩'],
   knight: ['🐴', '나이트'], king: ['👑', '킹'], mortar: ['💣', '박격포'], scatter: ['🎲', '난사'], queen: ['👸', '퀸'],
@@ -86,6 +87,7 @@ Object.keys(NAMES).forEach((k, n) => {
   const mark = st => el.querySelectorAll('[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === st));
   el.querySelectorAll('[data-st]').forEach(b => { b.onclick = () => {
     Chars.play(svg, b.dataset.st); mark(b.dataset.st);
+    if (window.Sfx) { if (b.dataset.st === 'hit') Sfx.hurt(n, 'thud', k); if (b.dataset.st === 'attack') Sfx.attack(k, n); }
     const ms = Chars.ONE_SHOT[b.dataset.st];
     if (ms) setTimeout(() => { if (svg.classList.contains('st-idle')) mark('idle'); }, ms + 20);
   }; });

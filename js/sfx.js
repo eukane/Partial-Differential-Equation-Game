@@ -70,6 +70,34 @@
     src.connect(f); f.connect(g); g.connect(bus[k]);
     src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.05);
   }
+  /** 목소리: 톱니파를 모음 필터(포먼트 두 개)에 통과시켜 '윽', '꺄' 같은 소리를 낸다
+   *  f → (fm: 중간 높이) → f2 로 억양, form/form2: 모음 색깔, vib: 떨림 */
+  function vox(o) {
+    const t = ctx.currentTime + (o.at || 0), dur = o.dur || 0.2;
+    const osc = ctx.createOscillator(), g = ctx.createGain(), mix = ctx.createGain();
+    osc.type = o.type || 'sawtooth';
+    osc.frequency.setValueAtTime(o.f, t);
+    if (o.fm) osc.frequency.linearRampToValueAtTime(o.fm, t + dur * 0.35);
+    if (o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(30, o.f2), t + dur);
+    if (o.vib) {
+      const lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = o.vib; lg.gain.value = o.f * (o.vibDepth || 0.05);
+      lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t); lfo.stop(t + dur + 0.05);
+    }
+    for (const [fq, q, v] of [[o.form || 800, 3, 1], [(o.form2 || (o.form || 800) * 2.4), 5, 0.5]]) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = fq; bp.Q.value = q;
+      const bg = ctx.createGain(); bg.gain.value = v;
+      osc.connect(bp); bp.connect(bg); bg.connect(mix);
+    }
+    const v = (o.vol || 0.3) * 2.2;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(v, t + 0.012);
+    g.gain.setValueAtTime(v, t + dur * 0.55);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    mix.connect(g); g.connect(bus.game);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  }
   const boom = (k, at = 0, vol = 0.6, dur = 0.5) => {
     tone(k, { f: 90, f2: 32, dur, vol, at });
     noise(k, { filter: 'lowpass', f: 1200, f2: 150, dur: dur * 0.9, vol: vol * 0.8, at });
@@ -135,7 +163,30 @@
     wave: () => { noise('game', { filter: 'lowpass', f: 1600, f2: 200, dur: 0.32, vol: 0.45 }); impact(0, 0.3); },                                                                             // 쿠왕
   };
 
-  /** 캐릭터별 피격 목소리 */
+  /** 직업 캐릭터별 피격 목소리 (p: 같은 직업이어도 자리마다 살짝 다른 높이) */
+  const VOICE = {
+    sniper: p => vox({ f: 190 * p, f2: 120 * p, dur: 0.24, form: 700 }),                                                                 // 카우보이 "윽!"
+    shotgun: p => { vox({ f: 125 * p, f2: 85 * p, dur: 0.28, form: 520, vol: 0.35 }); noise('game', { filter: 'lowpass', f: 400, dur: 0.2, vol: 0.12 }); }, // 수염 사냥꾼 "흐읍!"
+    ricochet: p => vox({ f: 540 * p, f2: 390 * p, dur: 0.18, form: 1400 }),                                                              // 새총 소년 "아야!"
+    bishop: p => vox({ f: 270 * p, fm: 330 * p, f2: 210 * p, dur: 0.34, form: 620, vib: 6 }),                                            // 주교 "오오…"
+    rook: p => { vox({ f: 150 * p, f2: 110 * p, dur: 0.22, form: 820 }); tone('game', { f: 2300, f2: 2100, dur: 0.18, type: 'triangle', vol: 0.08 }); }, // 갑옷 "크윽" + 쨍
+    knight: p => { vox({ f: 230 * p, f2: 150 * p, dur: 0.22, form: 900 }); tone('game', { f: 1900, dur: 0.12, type: 'triangle', vol: 0.06 }); },        // 기사 "욱!" + 철컹
+    king: p => vox({ f: 175 * p, fm: 210 * p, f2: 110 * p, dur: 0.36, form: 560, vib: 9, vibDepth: 0.07 }),                              // 왕 "어허억!"
+    mortar: p => vox({ f: 165 * p, f2: 100 * p, dur: 0.28, form: 760, type: 'square', vol: 0.22 }),                                      // 군인 "크억!"
+    scatter: p => [0, 0.1].forEach(at => vox({ f: 210 * p, f2: 150 * p, dur: 0.1, form: 1000, at })),                                   // 갱스터 "억, 억!"
+    queen: p => vox({ f: 720 * p, fm: 920 * p, f2: 620 * p, dur: 0.32, form: 1800, form2: 3200, vib: 7 }),                                // 여왕 "꺄악!"
+    laser: p => [0, 0.07, 0.14].forEach((at, i) => vox({ f: (330 - i * 50) * p, dur: 0.07, form: 1200, type: 'square', vol: 0.2, at })), // 우주비행사 "삐-삐-뽀"
+    spear: p => vox({ f: 145 * p, f2: 100 * p, dur: 0.26, form: 650, vol: 0.35 }),                                                       // 스파르타 "흐윽!"
+    vampire: p => { noise('game', { filter: 'highpass', f: 3500, dur: 0.32, vol: 0.18 }); vox({ f: 110 * p, f2: 80 * p, dur: 0.3, form: 450, vol: 0.2 }); }, // 흡혈귀 "쉬익…"
+    chain: p => vox({ f: 420 * p, fm: 720 * p, f2: 300 * p, dur: 0.3, form: 1250, vib: 14 }),                                            // 과학자 "끼에엑!"
+    whirl: p => vox({ f: 200 * p, f2: 140 * p, dur: 0.16, form: 720, vol: 0.34 }),                                                       // 사무라이 "큭!"
+    boomerang: p => vox({ f: 450 * p, f2: 310 * p, dur: 0.2, form: 1300 }),                                                              // 부메랑 소년 "아얏!"
+    grapple: p => vox({ f: 155 * p, fm: 175 * p, f2: 110 * p, dur: 0.34, form: 640, vib: 24, vibDepth: 0.08 }),                          // 해적 "아르르!"
+    shockwave: p => vox({ f: 240 * p, f2: 175 * p, dur: 0.15, form: 900, vol: 0.34 }),                                                   // 격투가 "흡!"
+    homing: p => { vox({ f: 370 * p, f2: 250 * p, dur: 0.26, form: 1100, vib: 8 }); tone('game', { f: 2600, f2: 3400, dur: 0.15, vol: 0.05, at: 0.12 }); }, // 마법사 "으앗" + 반짝
+  };
+
+  /** 캐릭터별 피격 목소리 (직업을 고르기 전 동물일 때) */
   const HURT = [
     () => { tone('game', { f: 950, f2: 520, dur: 0.12, type: 'square', vol: 0.12 }); tone('game', { f: 760, f2: 420, dur: 0.1, type: 'square', vol: 0.1, at: 0.1 }); },  // 🦊 깽!
     () => tone('game', { f: 520, f2: 330, dur: 0.24, type: 'sawtooth', vol: 0.13, vib: 32 }),                                                                   // 🐧 꽥
@@ -184,12 +235,18 @@
       if (level.game <= 0 || !ready()) return;
       (ATTACK[style] || ATTACK.sniper)(pf(id));
     },
-    /** 피격 소리: 무기에 따른 타격음 (kind: 쨍·퍽·지직·콰광…) + 그 말의 목소리 */
-    hurt(id, kind) {
+    /** 피격 소리: 무기에 따른 타격음 (kind: 쨍·퍽·지직·콰광…) + 맞은 캐릭터의 목소리 (style: 직업, 없으면 동물) */
+    hurt(id, kind, style) {
       if (level.game <= 0 || !ready() || throttled('hurt' + id, 60)) return;
       if (IMPACT[kind] && !throttled('imp-' + kind, 45)) IMPACT[kind]();
       else if (!IMPACT[kind]) impact();
-      (HURT[id] || HURT[0])();
+      if (VOICE[style]) VOICE[style](1 + (pf(id) - 1) * 0.25);
+      else (HURT[id] || HURT[0])();
+    },
+    /** 설정·미리듣기용: 직업 목소리만 */
+    voice(style, id = 0) {
+      if (level.game <= 0 || !ready() || !VOICE[style]) return;
+      VOICE[style](1 + (pf(id) - 1) * 0.25);
     },
     /** 이동: 발소리 세 번 (말마다 발소리 높이가 다르다) */
     move(id) {

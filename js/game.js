@@ -1719,7 +1719,7 @@
     if (src && src !== t) src.dealt = (src.dealt || 0) + (before - t.hp);
     floatText(t, `-${amt}`, 'dmg');
     hitFx(t);
-    if (window.Sfx) Sfx.hurt(t.id, S.hitKind);
+    if (window.Sfx) Sfx.hurt(t.id, S.hitKind, t.style);
     const self = src === t;
     log(`${self ? '🤕' : '💢'} ${tag(t)} ${why}으로 ${amt} 피해${self ? ' (자폭!)' : ''} → HP ${t.hp}`);
     if (t.hp <= 0) {
