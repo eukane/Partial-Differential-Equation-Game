@@ -1,4 +1,5 @@
 /* 미분 배틀 배경음악
+ * 스타일 두 가지: swing(일렉트로스윙, 기본) · orch(오케스트라 록). 파일 이름은 swing-battle.mp3 / battle.mp3 처럼.
  * audio/*.mp3 는 tools/music/compose.py 로 작곡한 오리지널 곡을 실제 악기 샘플(FluidR3_GM 사운드폰트)로 렌더링한 것.
  *   battle  : 평소 전투 (164bpm) — 신스 도입 → 호른 선율 + 기타 뮤트 → 트럼펫·신스 리드·기타 질주·합창이 터지는 격정 파트
  *   pinch   : 체력이 낮을 때 (184bpm) — 트레몰로 현악, 신스 베이스 펄스, 팀파니·기타 스탭, 트럼펫 고음 선율
@@ -12,19 +13,29 @@
   const VOL = 0.5;
   const FADE = 1.0;
   const BASE = 'audio/';
-  const VER = '?v=20260925-9';
+  const VER = '?v=20260925-10';
   // tools/music/out/loops.json 과 같은 값 (초)
   const LOOPS = {
-    battle: { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },
-    pinch: { loopStart: 20.869565217391305, loopEnd: 41.73913043478261 },
-    victory: null,
+    'battle': { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },
+    'pinch': { loopStart: 20.869565217391305, loopEnd: 41.73913043478261 },
+    'victory': null,
+    'swing-battle': { loopStart: 36.36363636363637, loopEnd: 65.45454545454545 },
+    'swing-pinch': { loopStart: 25.263157894736842, loopEnd: 50.526315789473685 },
+    'swing-victory': null,
   };
 
   let ctx = null, out = null;
   let muted = false, want = null, name = null, playing = null; // playing: { src, gain, name }
   const bufs = {}, loading = {};
   const played = {}; // 한 번 들은 곡은 도입을 건너뛰고 반복 구간부터
-  try { muted = localStorage.getItem('pdeb-mute') === '1'; } catch (e) { /* 저장소 없음 */ }
+  let style = 'swing';
+  try {
+    muted = localStorage.getItem('pdeb-mute') === '1';
+    if (localStorage.getItem('pdeb-bgm') === 'orch') style = 'orch';
+  } catch (e) { /* 저장소 없음 */ }
+  const STYLES = ['swing', 'orch'];
+  /** 'battle' → 'swing-battle' (일렉트로스윙) 또는 'battle' (오케스트라 록) */
+  const file = n => (style === 'swing' ? 'swing-' + n : n);
 
   function init() {
     if (ctx) return true;
@@ -84,16 +95,24 @@
   function sync() {
     if (muted || !init()) return;
     if (!want) { stopCurrent(1.2); name = null; return; }
-    if (want === name && playing) return;
+    const n = file(want);
+    if (n === name && playing) return;
     ctx.resume();
-    const n = want;
-    load(n).then(buf => { if (want === n && !muted && name !== n) startTrack(n, buf); })
+    load(n).then(buf => { if (want && file(want) === n && !muted && name !== n) startTrack(n, buf); })
       .catch(() => { /* 파일을 못 불러오면(예: file:// 로 연 경우) 조용히 넘어간다 */ });
   }
 
   const Music = {
     get muted() { return muted; },
     get current() { return name; },
+    get style() { return style; },
+    /** 배경음악 스타일 바꾸기 ('swing' | 'orch'). 지금 곡이 있으면 같은 곡의 다른 버전으로 넘어간다 */
+    setStyle(st) {
+      if (!STYLES.includes(st) || st === style) return;
+      style = st;
+      try { localStorage.setItem('pdeb-bgm', st); } catch (e) { /* 저장소 없음 */ }
+      if (want) sync();
+    },
     /** 'battle' | 'pinch' | null(멈춤). 같은 곡이면 아무 일도 없다. */
     play(n) {
       n = n === 'battle' || n === 'pinch' ? n : null;
@@ -108,7 +127,7 @@
       for (const k in played) played[k] = false;
       if (muted || !init()) return;
       ctx.resume();
-      load('victory').then(buf => { if (!want && !muted) startTrack('victory', buf); }).catch(() => {});
+      load(file('victory')).then(buf => { if (!want && !muted) startTrack(file('victory'), buf); }).catch(() => {});
     },
     /** 음소거 전환. 반환값: 지금 음소거 상태 */
     toggle() {
@@ -128,7 +147,7 @@
     /** 곡 파일을 미리 받아 둔다 (게임 시작 전에) */
     preload() {
       if (!init()) return;
-      ['battle', 'pinch'].forEach(n => load(n).catch(() => {}));
+      ['battle', 'pinch'].forEach(n => load(file(n)).catch(() => {}));
     },
   };
 

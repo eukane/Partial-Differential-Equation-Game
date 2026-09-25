@@ -228,6 +228,9 @@
     const toggleSound = () => { if (window.Music) { Music.toggle(); renderSound(); } };
     $('#btnSound').onclick = toggleSound;
     $('#mSound').onclick = toggleSound;
+    const nextBgm = () => setBgm(window.Music && Music.style === 'swing' ? 'orch' : 'swing');
+    $('#btnBgm').onclick = nextBgm;
+    $('#mBgm').onclick = nextBgm;
     renderSound();
     // 브라우저는 사용자가 한 번 누르기 전까지 소리를 막는다
     document.addEventListener('pointerdown', () => { if (window.Music) Music.unlock(); }, true);
@@ -413,6 +416,22 @@
     $('#btnSound').textContent = on ? '🔊' : '🔇';
     $('#btnSound').title = on ? '배경음악 끄기' : '배경음악 켜기';
     $('#mSound').textContent = on ? '🔊 배경음악 켜짐' : '🔇 배경음악 꺼짐';
+    const st = window.Music ? Music.style : 'swing';
+    $('#btnBgm').textContent = BGM_STYLES[st].short;
+    $('#mBgm').textContent = `${BGM_STYLES[st].icon} 배경음악: ${BGM_STYLES[st].name}`;
+    $('#bgmRow').innerHTML = `<span>배경음악</span>${Object.entries(BGM_STYLES).map(([k, v]) =>
+      `<button class="hp-btn ${k === st ? 'sel' : ''}" data-bgm="${k}">${v.icon} ${v.name}</button>`).join('')}`;
+    $('#bgmRow').querySelectorAll('[data-bgm]').forEach(b => { b.onclick = () => setBgm(b.dataset.bgm); });
+  }
+
+  const BGM_STYLES = {
+    swing: { icon: '🎷', name: '일렉트로스윙', short: '🎷 스윙' },
+    orch: { icon: '🎺', name: '오케스트라 록', short: '🎺 오케' },
+  };
+  function setBgm(st) {
+    if (!window.Music) return;
+    Music.setStyle(st);
+    renderSound();
   }
 
   function renderPlayers() {

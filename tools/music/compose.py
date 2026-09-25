@@ -427,7 +427,8 @@ def victory():
 
 
 if __name__ == '__main__':
-    loops = {'battle': battle(), 'pinch': pinch(), 'victory': victory()}
+    import swing
+    loops = {'battle': battle(), 'pinch': pinch(), 'victory': victory(), **swing.main()}
     with open(os.path.join(OUT, 'loops.json'), 'w') as f:
         json.dump(loops, f, indent=2)
     print(json.dumps(loops, indent=2))
