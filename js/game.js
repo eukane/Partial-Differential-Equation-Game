@@ -84,10 +84,20 @@
     { id: 'bomb',   icon: '💣', name: '꽝! 폭탄', desc: '자신이 15 피해',           w: 2, bad: true },
   ];
 
+  // 🧪 실험 모드: 장애물(돌·상자) + 자기장 축소
+  const OBST_COUNT = { square: { rock: 4, crate: 4 }, pentagon: { rock: 6, crate: 6 } };
+  const CRATE_HP = 2;            // 상자는 두 번 맞으면 부서지고, 부순 사람은 🛡️ 방패
+  const ZONE_TURN = { start: 5, every: 3 };    // 턴제: 5라운드에 첫 축소, 그 뒤 3라운드마다 한 겹
+  const ZONE_BRAWL = { start: 24, every: 16 }; // 난전: 전체 행동 수 기준
+  const ZONE_DMG = [0, 10, 15, 20, 25];        // 자기장 단계별 피해 (턴제: 라운드마다, 난전: 행동할 때마다)
+
   // ------------------------------------------------------------------
   //  상태
   // ------------------------------------------------------------------
   const S = {
+    exp: false,       // 🧪 실험 모드
+    obst: new Map(),  // 'x,y' → { kind: 'rock' | 'crate', hp, i }
+    depth: null,      // 'x,y' → 판 가장자리에서 몇 겹 안쪽인지 (0 = 가장자리)
     players: [],
     turn: 0,
     round: 1,
@@ -137,6 +147,10 @@
   const enemies = p => S.players.filter(q => q.alive && q !== p);
   const at = (x, y, except) => S.players.find(p => p.alive && p !== except && p.x === x && p.y === y) || null;
   const dirIdx = (dx, dy) => DIRS.findIndex(d => d[0] === dx && d[1] === dy);
+  /** 장애물 (없으면 null) */
+  const obAt = (x, y) => (S.exp && S.obst.get(x + ',' + y)) || null;
+  /** 말이 설 수 있는 빈 칸 */
+  const open = (x, y) => inB(x, y) && !at(x, y) && !obAt(x, y);
   /** 내가 조작하는 말인가 (턴제: 내 차례, 난전: 내가 살아 있음) */
   const myTurn = () => (!S.online ? !(S.players[S.turn] && S.players[S.turn].bot)
     : S.mode === 'brawl' ? !!(S.players[S.online.mySeat] && S.players[S.online.mySeat].alive)
@@ -356,12 +370,23 @@
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     S.gseed = newSeed();
     S.mode = 'turn';
+    S.exp = !!($('#optExp') && $('#optExp').checked);
+    initObstacles();
     initCoins();
     el.log.innerHTML = '';
     el.setup.classList.add('hidden');
     log('🎮 게임 시작! 첫 차례에 증강(공격 스타일)을 고르세요.');
+    expIntro();
     renderAll();
     showHandover();
+  }
+
+  /** 🧪 실험 모드 안내 */
+  function expIntro() {
+    if (!S.exp) return;
+    const Z = brawl() ? ZONE_BRAWL : ZONE_TURN;
+    log(`🧪 실험 모드: 🪨 돌은 탄을 막고(튕기는 탄은 튕김), 📦 상자는 ${CRATE_HP}번 맞으면 부서져요(부순 사람 🛡️). ⚡ 자기장은 ${brawl() ? `행동 ${Z.start}번째부터` : `${Z.start}라운드부터`} 바깥부터 좁혀 와요.`);
+    setTimeout(() => toast('🧪 실험 모드: 돌·상자 + 자기장', 2400), 600);
   }
 
   function layout() {
@@ -416,6 +441,7 @@
   function renderAll() {
     renderPlayers();
     renderPieces();
+    renderObstacles();
     renderTurn();
     renderGuide();
     updateCamera();
@@ -1018,12 +1044,13 @@
     let pos = S.pos, round = S.round, id = S.turn;
     for (let guard = 0; guard < 4 * n; guard++) {
       pos++;
-      if (pos >= n) { pos = 0; round++; }
+      if (pos >= n) { pos = 0; round++; S.round = round; zoneRound(); }
       id = orderFor()[pos];
       // 죽은 사람은 건너뛰고, 라운드가 바뀌며 같은 사람이 연달아 두 번 하지 않게 한다
       if (S.players[id].alive && (id !== S.turn || aliveCount < 2)) break;
     }
     S.pos = pos; S.round = round; S.turn = id;
+    if (checkWin()) return;   // 자기장 피해로 끝났을 수 있다
     S.players[id].aimBase = S.players[id].ang;   // 저격 조준 제한의 기준 (이번 턴 시작 방향)
     S.awayNoted = false;
     await sleep(350);
@@ -1269,7 +1296,10 @@
     const canAttack = brawl() || !(prepRound() || S.extraActive);
     const atk = canAttack ? botBestAttack(p) : { score: 0 };
     const low = p.hp <= S.maxHp * 0.35;
-    if ((atk.score >= 1 || (atk.gamble && atk.score >= 0.35)) && !(low && atk.score < 1.5 && chance(0.3))) {
+    // 🧪 자기장 안(또는 곧 자기장)이면 대개 먼저 빠져나온다
+    const zl = S.exp ? Math.max(zoneLevel(), zoneSoon()) : 0;
+    const flee = zl > 0 && inZone(p.x, p.y, zl) && chance(0.8);
+    if (!flee && (atk.score >= 1 || (atk.gamble && atk.score >= 0.35)) && !(low && atk.score < 1.5 && chance(0.3))) {
       act.key = 'attack';
       if (atk.ang != null) act.ang = atk.ang;
       if (atk.tgt) act.tgt = atk.tgt;
@@ -1284,11 +1314,12 @@
     for (const [x, y] of moveCells(p, range)) {
       p.x = x; p.y = y;
       const v = botBestAttack(p).score * 2 + (low ? dist() * 0.15 : -dist() * 0.15)
-        + ((S.coins || []).some(c => c[0] === x && c[1] === y) ? 0.3 : 0) + Math.random() * 0.2;
+        + ((S.coins || []).some(c => c[0] === x && c[1] === y) ? 0.3 : 0) + Math.random() * 0.2
+        - (zl && inZone(x, y, zl) ? 4 : 0);
       if (!best || v > best.v) best = { v, dest: [x, y] };
     }
     p.x = x0; p.y = y0;
-    if (!best || chance(0.15)) { act.key = 'box'; return act; }
+    if (!best || (!flee && chance(0.15))) { act.key = 'box'; return act; }
     act.key = 'move';
     act.dest = best.dest;
     return act;
@@ -1394,7 +1425,7 @@
     for (let dy = -range; dy <= range; dy++) {
       for (let dx = -range; dx <= range; dx++) {
         const x = p.x + dx, y = p.y + dy;
-        if ((dx || dy) && inB(x, y) && !at(x, y)) out.push([x, y]);
+        if ((dx || dy) && open(x, y)) out.push([x, y]);
       }
     }
     return out;
@@ -1402,7 +1433,7 @@
   const KNIGHT_JUMPS = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
   /** 나이트가 뛰어들 수 있는 칸: L자 칸 중 판 안의 빈 칸 */
   function knightCells(p) {
-    return KNIGHT_JUMPS.map(([dx, dy]) => [p.x + dx, p.y + dy]).filter(([x, y]) => inB(x, y) && !at(x, y));
+    return KNIGHT_JUMPS.map(([dx, dy]) => [p.x + dx, p.y + dy]).filter(([x, y]) => open(x, y));
   }
   function mortarCells(p) {
     const out = [];
@@ -1474,7 +1505,7 @@
     S.applying = true;
     rng = mulberry32(act.seed | 0);
     try {
-      if (act.key === 'restart') { restartOnline(act.seed); return; }
+      if (act.key === 'restart') { S.zoneSeq0 = act.seq | 0; restartOnline(act.seed); return; }
       if (brawl()) { await applyBrawl(act); return; }
       const p = cur();
       if (act.key === 'pick') {
@@ -1524,6 +1555,7 @@
   /** 난전: 누구의 행동이든 도착한 순서대로 바로 실행 (차례 없음) */
   async function applyBrawl(act) {
     const p = S.players[act.actor];
+    S.zoneSeq = act.seq | 0;   // 난전 자기장은 행동 번호로 (모든 화면이 같은 값)
     const mine = S.online && act.actor === S.online.mySeat;
     try {
       if (!p || !p.alive) return;
@@ -1546,6 +1578,7 @@
       if (act.ang != null) p.aimBase = act.ang;
       checkWin();
     } finally {
+      if (S.exp && act.key !== 'pick' && S.phase !== 'over') { zoneBrawlAfter(p); checkWin(); }
       if (mine) S.myBusy = false;
       if (S.phase !== 'over') S.phase = 'choose';
       renderAll();
@@ -1742,7 +1775,7 @@
     let pos = [ox, oy];
     let v = vec(a);
     const pts = [pos];
-    const hits = [];
+    const hits = [], crates = [];
     let travelled = 0, left = maxLen;
     for (let seg = 0; seg <= bounces; seg++) {
       // 가장 가까운 벽 (판의 다각형 변)
@@ -1759,6 +1792,21 @@
         if (tt <= 1e-7 || u < -1e-9 || u > 1 + 1e-9) continue;
         if (tt < t - 1e-7) { t = tt; walls = [w]; } else if (Math.abs(tt - t) <= 1e-7) walls.push(w);
       }
+      // 🧪 장애물: 돌은 벽처럼 막고(튕기는 탄은 튕김), 상자는 탄을 멈추고 부서진다 (관통탄은 부수며 지나감)
+      let rock = null, crate = null;
+      const passed = [];
+      if (S.exp && S.obst.size) {
+        for (const [key, o] of S.obst) {
+          const r = boxHit(pos, v, o.x, o.y);
+          if (!r || r.t >= t - 1e-7) continue;
+          if (o.kind === 'rock') { if (!rock || r.t < rock.t) rock = { ...r, key }; }
+          else if (pierce) passed.push({ key, t: r.t });
+          else if (!crate || r.t < crate.t) crate = { ...r, key };
+        }
+      }
+      const block = [rock, crate].filter(Boolean).sort((m, n) => m.t - n.t)[0];
+      if (block) { t = block.t; walls = []; }
+      for (const c of passed) if (c.t < t && !crates.some(k => k.key === c.key)) crates.push({ key: c.key, d: travelled + c.t, at: [pos[0] + v[0] * c.t, pos[1] + v[1] * c.t] });
       const found = [];
       for (const q of S.players) {
         // multi: 벽에 튕긴 뒤 같은 적을 또 맞힐 수 있다 (한 구간에서는 한 번) · noSelf: 쏜 사람은 안 맞는다
@@ -1772,13 +1820,20 @@
       for (const f of found) {
         const hitAt = [pos[0] + v[0] * f.s, pos[1] + v[1] * f.s];
         hits.push({ q: f.q, d: travelled + f.s, bounces: seg, at: hitAt });
-        if (!pierce) { pts.push(hitAt); return { pts, hits }; }
+        if (!pierce) { pts.push(hitAt); return { pts, hits, crates }; }
       }
       pos = [pos[0] + v[0] * t, pos[1] + v[1] * t];
       pts.push(pos);
       travelled += t;
       left -= t;
+      // 상자에 막힘: 상자가 맞고 탄은 멈춘다
+      if (block && block === crate) { crates.push({ key: crate.key, d: travelled, at: pos }); break; }
       if (left <= 1e-9 || seg === bounces) break;
+      if (block) {   // 돌에 튕김
+        const [nx, ny] = block.n, d = v[0] * nx + v[1] * ny;
+        v = [v[0] - 2 * d * nx, v[1] - 2 * d * ny];
+        continue;
+      }
       // 벽의 법선에 대해 반사 (모서리면 두 벽 모두)
       for (const w of walls) {
         const e0 = poly[w], e1 = poly[(w + 1) % poly.length];
@@ -1788,7 +1843,22 @@
         v = [v[0] - 2 * d * nx, v[1] - 2 * d * ny];
       }
     }
-    return { pts, hits };
+    return { pts, hits, crates };
+  }
+  /** 칸 (x, y) 의 장애물 상자(조금 안쪽)와 광선의 교차: 들어가는 거리 t 와 부딪힌 면의 법선 n */
+  const OB_PAD = 0.1;
+  function boxHit(pos, v, x, y) {
+    let tmin = -Infinity, tmax = Infinity, n = [0, 0];
+    const lo = [x + OB_PAD, y + OB_PAD], hi = [x + 1 - OB_PAD, y + 1 - OB_PAD];
+    for (let k = 0; k < 2; k++) {
+      if (Math.abs(v[k]) < 1e-12) { if (pos[k] < lo[k] || pos[k] > hi[k]) return null; continue; }
+      let t1 = (lo[k] - pos[k]) / v[k], t2 = (hi[k] - pos[k]) / v[k];
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      if (t1 > tmin) { tmin = t1; n = k === 0 ? [v[0] > 0 ? -1 : 1, 0] : [0, v[1] > 0 ? -1 : 1]; }
+      tmax = Math.min(tmax, t2);
+    }
+    if (tmax < tmin || tmin <= 1e-7) return null;
+    return { t: tmin, n };
   }
 
   /** 공격 계획. 조준 안내선과 실제 공격이 같은 계산을 쓴다. */
@@ -1903,6 +1973,7 @@
       const e = r.pts[r.pts.length - 1];
       svg('circle', { class: 'guide-end', cx: e[0], cy: e[1], r: 0.09, fill: p.color });
       r.hits.forEach(h => marked.add(h.q));
+      for (const c of r.crates || []) { const o = S.obst.get(c.key); if (o) svg('rect', { class: 'guide-cell crate-hit', x: o.x + 0.06, y: o.y + 0.06, width: 0.88, height: 0.88, stroke: p.color }); }
     }
     for (const [x, y] of plan.cells) {
       svg('rect', { class: 'guide-cell', x: x + 0.1, y: y + 0.1, width: 0.8, height: 0.8, stroke: p.color });
@@ -1934,9 +2005,28 @@
     }
   }
 
+  /** 🧪 상자 맞음: 두 번 맞으면 부서지고, 부순 사람은 🛡️ 방패 */
+  function hitCrate(key, p, kind = 'thud') {
+    const o = S.obst.get(key);
+    if (!o || o.kind !== 'crate' || o.hp <= 0) return;
+    o.hp--;
+    impactFx(o.x + 0.5, o.y + 0.5, kind === 'boom' ? 'boom' : 'thud', '#e8c48a');
+    if (window.Sfx) Sfx.play('crate');
+    if (o.hp <= 0) {
+      S.obst.delete(key);
+      burst(o.x + 0.5, o.y + 0.5, '#e8c48a');
+      if (p && p.alive) {
+        p.shield = true;
+        floatText(p, '🛡️', 'heal');
+        log(`${tag(p)} 📦 ${coord(o.x, o.y)} 상자를 부쉈다 → 🛡️ 방패!`);
+      }
+    }
+    renderObstacles();
+  }
+
   /** 말을 (x, y) 로 옮긴다 (판 안의 빈 칸일 때만) */
   function shove(q, x, y, why) {
-    if ((x === q.x && y === q.y) || !inB(x, y) || at(x, y)) return false;
+    if ((x === q.x && y === q.y) || !open(x, y)) return false;
     burst(q.x + 0.5, q.y + 0.5, '#9be7ff');
     q.x = x; q.y = y;
     renderPieces();
@@ -1980,7 +2070,7 @@
     charPlay(p, 'attack');
     if (p.style === 'knight') {
       // 공격 시점에 다시 확인 (난전에서는 그사이 누가 그 칸에 들어왔을 수 있다) → 안 되면 제자리에서 내려찍기
-      const ok = tgt && KNIGHT_JUMPS.some(([dx, dy]) => p.x + dx === tgt[0] && p.y + dy === tgt[1]) && inB(tgt[0], tgt[1]) && !at(tgt[0], tgt[1]);
+      const ok = tgt && KNIGHT_JUMPS.some(([dx, dy]) => p.x + dx === tgt[0] && p.y + dy === tgt[1]) && open(tgt[0], tgt[1]);
       if (ok) {
         sfx('jump');
         await animatePath([[p.x + 0.5, p.y + 0.5], [(p.x + tgt[0]) / 2 + 0.5, (p.y + tgt[1]) / 2 + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], p.color, 14, [], LOOKS.knight);
@@ -2000,7 +2090,7 @@
     p.atk = (p.atk || 0) + 1;
     const look = lookOf(p.style);
     S.hitKind = look.hit;
-    await Promise.all(plan.rays.map(r => sleep(r.delay || 0).then(() => animatePath(r.pts, p.color, 12, r.hits.map(h => ({
+    await Promise.all(plan.rays.map(r => sleep(r.delay || 0).then(() => animatePath(r.pts, p.color, 12, [...r.hits.map(h => ({
       d: h.d,
       fn: () => {
         hitCount++;
@@ -2009,7 +2099,7 @@
         const dealt = damage(h.q, hitDmg(mult), p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회${p.style === 'ricochet' ? ` +${Math.round(RICO_BONUS * 100 * h.bounces)}%` : ''})` : ''}`);
         if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 3));
       },
-    })), look))));
+    })), ...(r.crates || []).map(c => ({ d: c.d, fn: () => hitCrate(c.key, p, look.hit) }))], look))));
     if (plan.cells.length) {
       if (p.style === 'mortar') {
         // 포탄은 포물선으로 (옆으로 휘어 보이게)
@@ -2027,6 +2117,7 @@
       await sleep(250);
       for (const [x, y, w] of plan.cells) {
         const q = at(x, y);
+        if (obAt(x, y)) hitCrate(x + ',' + y, p, kind);
         if (q) { hitCount++; if (q !== p) impactOn(q, kind, p.color, Math.atan2(y - p.y, x - p.x)); damage(q, hitDmg(w), p, s.name); }
       }
     }
@@ -2055,12 +2146,143 @@
     const r = mulberry32((S.gseed ^ 0x5eed) | 0);
     const free = [];
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (inB(x, y) && !at(x, y) && S.players.every(q => Math.max(Math.abs(q.x - x), Math.abs(q.y - y)) >= 2)) free.push([x, y]);
+      if (open(x, y) && S.players.every(q => Math.max(Math.abs(q.x - x), Math.abs(q.y - y)) >= 2)) free.push([x, y]);
     }
     S.coins = [];
     while (S.coins.length < COIN_COUNT && free.length) S.coins.push(free.splice(Math.floor(r() * free.length), 1)[0]);
     renderCoins();
   }
+  // ------------------------------------------------------------------
+  //  🧪 실험 모드: 장애물 + 자기장
+  // ------------------------------------------------------------------
+  /** 게임 seed 로 돌·상자를 놓는다 (모든 화면이 같다). 시작 칸 둘레 1칸과 서로 붙은 자리는 피한다 */
+  function initObstacles() {
+    S.obst = new Map();
+    computeDepth();
+    if (!S.exp) { renderObstacles(); return; }
+    const r = mulberry32((S.gseed ^ 0x0b57ac1e) | 0);
+    const want = OBST_COUNT[BOARD.kind === 'pentagon' ? 'pentagon' : 'square'];
+    const starts = LAYOUTS[S.players.length] || LAYOUTS[3];
+    const free = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (inB(x, y) && starts.every(([sx, sy]) => Math.max(Math.abs(sx - x), Math.abs(sy - y)) >= 2)) free.push([x, y]);
+    }
+    let i = 0;
+    for (const kind of ['rock', 'crate']) {
+      for (let k = 0; k < want[kind] && free.length; k++) {
+        // 이미 놓인 장애물과 붙지 않는 자리를 우선 (막힌 벽이 생기지 않게)
+        const spaced = free.filter(([x, y]) => ![...S.obst.values()].some(o => Math.max(Math.abs(o.x - x), Math.abs(o.y - y)) <= 1));
+        const pool = spaced.length ? spaced : free;
+        const [x, y] = pool[Math.floor(r() * pool.length)];
+        free.splice(free.findIndex(c => c[0] === x && c[1] === y), 1);
+        S.obst.set(x + ',' + y, { kind, x, y, hp: kind === 'crate' ? CRATE_HP : Infinity, i: i++ });
+      }
+    }
+    renderObstacles();
+  }
+  /** 각 칸이 판 가장자리에서 몇 겹 안쪽인지 (자기장이 바깥부터 좁혀 온다) */
+  function computeDepth() {
+    S.depth = new Map();
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (!inB(x, y)) continue;
+      let d = 99;
+      for (let yy = -1; yy <= N; yy++) for (let xx = -1; xx <= N; xx++) {
+        if (!inB(xx, yy)) d = Math.min(d, Math.max(Math.abs(xx - x), Math.abs(yy - y)) - 1);
+      }
+      S.depth.set(x + ',' + y, d);
+    }
+  }
+  const maxZone = () => Math.max(0, Math.max(...(S.depth ? S.depth.values() : [0])) - 1);
+  /** 자기장 단계 (0 = 없음). 턴제는 라운드, 난전은 전체 행동 수로 정한다 */
+  function zoneLevel(offset = 0) {
+    if (!S.exp) return 0;
+    const Z = brawl() ? ZONE_BRAWL : ZONE_TURN;
+    const n = (brawl() ? (S.zoneSeq || 0) - (S.zoneSeq0 || 0) : S.round) + offset;
+    return n < Z.start ? 0 : Math.min(maxZone(), 1 + Math.floor((n - Z.start) / Z.every));
+  }
+  const inZone = (x, y, lvl = zoneLevel()) => lvl > 0 && (S.depth.get(x + ',' + y) ?? 0) < lvl;
+  /** 곧 자기장이 될 칸 (턴제: 다음 라운드, 난전: 몇 행동 뒤) */
+  const zoneSoon = () => zoneLevel(brawl() ? 4 : 1);
+  function zoneHit(q, lvl) {
+    if (!q.alive) return;
+    burst(q.x + 0.5, q.y + 0.5, '#ff4d6d');
+    const was = S.hitKind, shield = q.shield;
+    S.hitKind = 'burn';
+    q.shield = false;   // 자기장은 방패로 못 막는다
+    damage(q, ZONE_DMG[Math.min(lvl, ZONE_DMG.length - 1)], null, '⚡자기장');
+    if (q.alive) q.shield = shield;
+    S.hitKind = was;
+  }
+  /** 턴제: 새 라운드가 시작될 때 자기장 안의 모든 말이 피해 */
+  function zoneRound() {
+    const lvl = zoneLevel();
+    if (!lvl) return;
+    if (lvl > zoneLevel(-1)) {
+      toast(`⚡ 자기장이 좁아졌어요! 빨간 칸에선 라운드마다 ${ZONE_DMG[lvl]} 피해`, 2600);
+      log(`⚡ 자기장 ${lvl}단계 — 빨간 칸에 있으면 라운드마다 ${ZONE_DMG[lvl]} 피해`);
+      shakeBoard(1);
+    }
+    for (const q of alive()) if (inZone(q.x, q.y, lvl)) zoneHit(q, lvl);
+    renderZone();
+  }
+  /** 난전: 행동이 끝날 때 — 단계가 올라가면 자기장 안의 모두, 아니면 행동한 사람만 */
+  function zoneBrawlAfter(p) {
+    const lvl = zoneLevel();
+    if (!lvl) { renderZone(); return; }
+    if (lvl > zoneLevel(-1)) {
+      toast(`⚡ 자기장이 좁아졌어요! 빨간 칸에서 행동하면 ${ZONE_DMG[lvl]} 피해`, 2600);
+      log(`⚡ 자기장 ${lvl}단계`);
+      for (const q of alive()) if (inZone(q.x, q.y, lvl)) zoneHit(q, lvl);
+    } else if (p && p.alive && inZone(p.x, p.y, lvl)) zoneHit(p, lvl);
+    renderZone();
+  }
+  function renderZone() {
+    if (!el.cells) return;
+    const lvl = zoneLevel(), soon = zoneSoon();
+    el.cells.querySelectorAll('.cell').forEach(c => {
+      const x = +c.dataset.x, y = +c.dataset.y;
+      const z = inB(x, y) && inZone(x, y, lvl);
+      c.classList.toggle('zone', z);
+      c.classList.toggle('zone-warn', !z && inB(x, y) && soon > lvl && inZone(x, y, soon));
+    });
+  }
+  const ROCK_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><ellipse cx="50" cy="92" rx="36" ry="7" fill="rgba(0,0,0,.35)"/>
+    <path d="M14 88 Q6 62 22 46 Q28 22 52 20 Q78 18 86 42 Q97 62 88 88 Z" fill="#8b93a7" stroke="#151827" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M30 44 Q36 30 52 29" fill="none" stroke="#c5cbd8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M58 56 L66 68 L60 80 M40 64 L34 76" fill="none" stroke="#5d6477" stroke-width="3.5" stroke-linecap="round"/></svg>`;
+  const crateSvg = hp => `<svg viewBox="0 0 100 100" aria-hidden="true"><ellipse cx="50" cy="92" rx="36" ry="7" fill="rgba(0,0,0,.35)"/>
+    <rect x="14" y="30" width="72" height="60" rx="5" fill="#c98b3c" stroke="#151827" stroke-width="5"/>
+    <path d="M14 50 L86 50 M14 70 L86 70" stroke="#8a5a2b" stroke-width="3.5"/>
+    <path d="M18 34 L82 86 M82 34 L18 86" stroke="#9b6834" stroke-width="5" stroke-linecap="round"/>
+    <rect x="14" y="30" width="72" height="60" rx="5" fill="none" stroke="#151827" stroke-width="5"/>
+    ${hp < CRATE_HP ? '<path d="M44 30 L50 46 L42 58 L52 72 M70 90 L64 76 L72 66" fill="none" stroke="#151827" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>' : ''}</svg>`;
+  /** 돌·상자를 판 위에 세워서 그린다 (말처럼 카메라를 바라봄) */
+  function renderObstacles() {
+    if (!el.pieces) return;
+    const keep = new Set();
+    for (const [key, o] of S.exp ? S.obst : []) {
+      keep.add(key);
+      let node = el.pieces.querySelector(`[data-ob="${key}"]`);
+      const look = o.kind + (o.kind === 'crate' ? o.hp : '');
+      if (!node) {
+        node = document.createElement('div');
+        node.className = 'piece obst';
+        node.dataset.ob = key;
+        node.style.setProperty('--x', o.x);
+        node.style.setProperty('--y', o.y);
+        node.innerHTML = '<div class="stand"><div class="avatar ob"></div></div>';
+        el.pieces.appendChild(node);
+      }
+      if (node.dataset.look !== look) {
+        node.dataset.look = look;
+        node.querySelector('.ob').innerHTML = o.kind === 'rock' ? ROCK_SVG : crateSvg(o.hp);
+        node.title = o.kind === 'rock' ? '돌: 탄을 막음 (튕기는 탄은 튕김)' : `상자: 탄을 막음 · ${o.hp}번 더 맞으면 부서짐 → 부순 사람 🛡️`;
+      }
+    }
+    el.pieces.querySelectorAll('.obst').forEach(n => { if (!keep.has(n.dataset.ob)) n.remove(); });
+    renderZone();
+  }
+
   function renderCoins() {
     el.cells.querySelectorAll('.coin').forEach(n => n.classList.remove('coin'));
     for (const [x, y] of S.coins || []) {
@@ -2095,14 +2317,14 @@
     // 쓴 동전 칸은 다른 빈 칸으로 옮겨 간다
     const free = [];
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (inB(x, y) && !at(x, y) && !S.coins.some(c => c[0] === x && c[1] === y)) free.push([x, y]);
+      if (open(x, y) && !S.coins.some(c => c[0] === x && c[1] === y)) free.push([x, y]);
     }
     if (free.length) S.coins[idx] = free[Math.floor(rng() * free.length)];
     renderCoins();
   }
 
   async function doMove(p, dest, range) {
-    if (!dest || at(dest[0], dest[1]) || Math.max(Math.abs(dest[0] - p.x), Math.abs(dest[1] - p.y)) > range) {
+    if (!dest || at(dest[0], dest[1]) || obAt(dest[0], dest[1]) || Math.max(Math.abs(dest[0] - p.x), Math.abs(dest[1] - p.y)) > range) {
       log(`${tag(p)} 👣 이동할 수 없는 칸이라 제자리`);
       return;
     }
@@ -2215,7 +2437,7 @@
         break;
       case 'tele': {
         const empty = [];
-        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inB(x, y) && !at(x, y)) empty.push([x, y]);
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (open(x, y)) empty.push([x, y]);
         const [x, y] = empty[rand(empty.length)];
         burst(p.x + 0.5, p.y + 0.5, '#b18cff');
         p.x = x; p.y = y;
@@ -2276,6 +2498,8 @@
   function snapshot() {
     return {
       t: S.turn, r: S.round, o: S.pos, x: S.extraActive ? 1 : 0, g: S.gseed, c: S.coins, m: S.maxHp,
+      zs: S.zoneSeq || 0, z0: S.zoneSeq0 || 0,
+      ob: S.exp ? [...S.obst.values()].filter(o => o.kind === 'crate').map(o => [o.i, o.hp]) : undefined,
       p: S.players.map(p => [p.x, p.y, Math.round(p.ang * 10), p.hp, p.alive ? 1 : 0, p.shield ? 1 : 0, p.power ? 1 : 0, p.correct, p.tries, p.score, STYLE_KEYS.indexOf(p.style), Math.round((p.aimBase == null ? p.ang : p.aimBase) * 10)]),
     };
   }
@@ -2291,6 +2515,20 @@
     S.coins = (Array.isArray(b.c) ? b.c : []).slice(0, COIN_COUNT)
       .map(c => [int(c && c[0], 0, N - 1), int(c && c[1], 0, N - 1)]).filter(c => inB(c[0], c[1]));
     renderCoins();
+    S.zoneSeq = int(b.zs, 0, 1e9, 0);
+    S.zoneSeq0 = int(b.z0, 0, 1e9, 0);
+    if (S.exp) {
+      initObstacles();
+      if (Array.isArray(b.ob)) {
+        const hp = new Map(b.ob.filter(Array.isArray).map(a => [int(a[0], 0, 99), int(a[1], 0, CRATE_HP)]));
+        for (const [k, o] of [...S.obst]) {
+          if (o.kind !== 'crate') continue;
+          const h = hp.get(o.i);
+          if (!h) S.obst.delete(k); else o.hp = h;
+        }
+      }
+      renderObstacles();
+    }
     b.p.forEach((a, i) => {
       const p = S.players[i];
       if (!p || !Array.isArray(a)) return;
@@ -2328,6 +2566,7 @@
     S.myBusy = false; S.lockUntil = 0;
     const names = S.players.map(p => p.name);
     S.players = names.map((nm, i) => makePlayer(i, nm, names.length));
+    initObstacles();
     initCoins();
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     closeModal();
@@ -2672,7 +2911,7 @@
       let code = '';
       for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
       if (!(await this.connect(code))) return;
-      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn', hp: S.maxHp };
+      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn', hp: S.maxHp, exp: !!($('#optExp') && $('#optExp').checked) };
       this.publish();
       showLobby();
     },
@@ -2682,7 +2921,7 @@
       const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
       if (!seats.length) return;
       seats[0].k = this.myKey();
-      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP) };
+      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP), exp: !!h.exp };
       this.queue = []; this.handled = {};
       if (S.online.phase === 'game') {
         this.enterGame();
@@ -2700,9 +2939,9 @@
       const o = S.online;
       this.room.presence({
         app: APP, room: o.code, role: 'host', uid: this.uid, nick: this.nick,
-        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, req: null, ep: o.epoch | 0,
+        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, ex: o.exp ? 1 : 0, req: null, ep: o.epoch | 0,
       }).catch(() => toast('방 정보를 보내지 못했어요', 2500));
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
     },
     startGame() {
       const o = S.online;
@@ -2711,10 +2950,12 @@
       this.queue = []; this.handled = {};
       this.enterGame();
       S.gseed = newSeed();
+      initObstacles();
       initCoins();
       o.seq = 0; o.act = null; o.base = snapshot(); o.acts = []; o.hist = [];
       this.publish();
       log('🎮 게임 시작! 문제를 맞혀 행동하세요.');
+      expIntro();
       startOnlineTurn();
     },
     accept(a) {
@@ -2801,6 +3042,7 @@
       o.timer = !!h.tm;
       o.mode = h.md === 'brawl' ? 'brawl' : 'turn';
       o.hp = int(h.mh, 50, 999, DEFAULT_HP);
+      o.exp = !!h.ex;
       if (h.ph === 'lobby') {
         if (o.phase === 'game') { toast('방장이 방을 새로 열었어요'); }
         o.phase = 'lobby';
@@ -2904,6 +3146,9 @@
       S.maxHp = o.hp || DEFAULT_HP;
       S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length, !!x.b));
       S.mode = o.mode === 'brawl' ? 'brawl' : 'turn';
+      S.exp = !!o.exp;
+      S.obst = new Map();
+      S.zoneSeq = 0; S.zoneSeq0 = 0;
       S.myBusy = false; S.lockUntil = 0; S.localAim = null;
       S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
       el.pieces.innerHTML = '';
@@ -2964,7 +3209,7 @@
     },
     publishSaveOnly() {
       const o = S.online;
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, cur: snapshot(), at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, cur: snapshot(), at: Date.now() });
     },
     leave() {
       if (this.room) {
@@ -3021,7 +3266,8 @@
             <button data-mode="turn" class="${o.mode !== 'brawl' ? 'sel' : ''}"><b>🎲 턴제</b><small>한 명씩 차례대로</small></button>
             <button data-mode="brawl" class="${o.mode === 'brawl' ? 'sel' : ''}"><b>🔥 난전</b><small>턴 없이 동시에, 맞히는 대로 행동</small></button>
           </div>
-          <div class="hp-row" id="lobbyHp"></div>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b> · 시작 체력 <b>${o.hp}</b></p>`}
+          <div class="hp-row" id="lobbyHp"></div>
+          <label class="check exp-check"><input type="checkbox" id="lobbyExp" ${o.exp ? 'checked' : ''}> 🧪 실험 모드 <small>돌·상자 장애물 + 자기장 축소</small></label>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b> · 시작 체력 <b>${o.hp}</b>${o.exp ? ' · <b>🧪 실험 모드</b> (장애물 + 자기장)' : ''}</p>`}
         <ul class="seats">${seats}</ul>
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
@@ -3059,6 +3305,8 @@
     el.lobby.querySelectorAll('[data-mode]').forEach(b => {
       b.onclick = () => { o.mode = b.dataset.mode; Net.publish(); renderLobby(); };
     });
+    const lx = $('#lobbyExp');
+    if (lx) lx.onchange = () => { o.exp = lx.checked; store.set('pdeb-exp', o.exp ? 1 : 0); Net.publish(); renderLobby(); };
     const lh = $('#lobbyHp');
     if (lh) S.renderHpPicker(lh, o.hp, h => { o.hp = h; store.set('pdeb-hp', h); Net.publish(); renderLobby(); });
     $('#btnLobbyLeave').onclick = () => Net.leave();
@@ -3144,7 +3392,8 @@
   if (/[?&]sim\b/.test(location.search)) {
     window.__sim = {
       styles: Object.keys(STYLES),
-      start(styles, hp = DEFAULT_HP) {
+      start(styles, hp = DEFAULT_HP, exp = false) {
+        if ($('#optExp')) $('#optExp').checked = !!exp;
         S.localCount = styles.length;
         S.localBots = new Set(styles.map((_, i) => i));
         S.maxHp = hp;
@@ -3162,6 +3411,10 @@
       },
       /** 테스트용: i 번 말이 지금 실제로 공격 (심화, 빠른 정답 아님) */
       async attack(i, power = false, target = null) { const p = S.players[i]; p.power = power; await doAttack(p, 'hard', false, target); return S.players.map(q => ({ name: q.name, hp: q.hp, x: q.x, y: q.y })); },
+      obst: () => [...S.obst.values()].map(o => ({ kind: o.kind, x: o.x, y: o.y, hp: o.hp })),
+      zone: () => ({ lvl: zoneLevel(), soon: zoneSoon(), inZone: S.players.map(p => inZone(p.x, p.y)) }),
+      setRound(r) { S.round = r; renderAll(); },
+      setObst(list) { S.obst = new Map(list.map(([kind, x, y], i) => [x + ',' + y, { kind, x, y, hp: kind === 'crate' ? CRATE_HP : Infinity, i }])); renderObstacles(); },
       state() {
         return { phase: S.phase, round: S.round,
           players: S.players.map(p => ({ style: p.style, hp: p.hp, alive: p.alive, dealt: p.dealt || 0, atk: p.atk || 0, landed: p.landed || 0 })) };

@@ -617,3 +617,17 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .fx .guide-times { font-size: .34px; font-weight: 800; fill: #ff5d6c; stroke: #0b1020; stroke-width: .06px; paint-order: stroke; }
 .fx .guide.limit { stroke-dasharray: .12 .12; opacity: .55; }
 .chip.limit-chip { background: #3d2a14; color: #ffcf8a; }
+
+/* 🧪 실험 모드: 장애물 · 자기장 */
+.piece.obst .avatar.ob {
+  width: calc(var(--cell) * .92); height: calc(var(--cell) * .92); border: 0; border-radius: 0; background: none; box-shadow: none;
+  margin-bottom: 0; font-size: 0; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .3));
+}
+.piece.obst .avatar.ob svg { width: 100%; height: 100%; display: block; }
+.cell.zone { box-shadow: inset 0 0 0 999px rgba(255, 40, 80, .38); }
+.cell.zone::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 80, 110, .35) 0 6%, transparent 6% 12%); animation: zonePulse 1.6s ease-in-out infinite; pointer-events: none; }
+.cell.zone-warn { box-shadow: inset 0 0 0 999px rgba(255, 170, 40, .28); }
+.cell.zone-warn::after { content: ''; position: absolute; inset: 8%; border: 2px dashed rgba(255, 150, 30, .85); border-radius: 4px; pointer-events: none; }
+@keyframes zonePulse { 50% { opacity: .45; } }
+.fx .guide-cell.crate-hit { stroke-dasharray: none; stroke-width: .06; fill: rgba(255, 210, 120, .18); }
+.exp-check small { color: var(--muted); margin-left: 4px; }

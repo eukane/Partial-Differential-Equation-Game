@@ -212,6 +212,7 @@
     box_tele: () => { tone('game', { f: 220, f2: 2200, dur: 0.28, vol: 0.18, vib: 20 }); tone('game', { f: 2200, f2: 220, dur: 0.28, vol: 0.16, at: 0.28, vib: 20 }); },
     box_swap: () => { noise('game', { f: 300, f2: 2400, dur: 0.22, vol: 0.28, q: 3 }); noise('game', { f: 2400, f2: 300, dur: 0.22, vol: 0.28, q: 3, at: 0.2 }); },
     box_again: () => [1320, 1760].forEach((f, i) => tone('game', { f, dur: 0.25, type: 'triangle', vol: 0.18, at: i * 0.12 })),
+    crate: () => { noise('game', { filter: 'lowpass', f: 900, f2: 300, dur: 0.14, vol: 0.4 }); tone('game', { f: 210, f2: 120, dur: 0.12, type: 'triangle', vol: 0.25 }); noise('game', { f: 2500, dur: 0.05, vol: 0.2, q: 4, at: 0.03 }); },
     box_bomb: () => { tone('game', { f: 900, dur: 0.05, type: 'square', vol: 0.08 }); boom('game', 0.1, 0.85, 0.8); },
   };
 
