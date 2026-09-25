@@ -1,5 +1,5 @@
 /* 미분 배틀 배경음악
- * 스타일: swing(일렉트로스윙, 기본) · swing2(밝은 장조 스윙, 임시) · orch(오케스트라 록). 파일 이름은 swing-battle.mp3 / battle.mp3 처럼.
+ * 스타일: swing(일렉트로스윙, 기본) · orch(오케스트라 록). 파일 이름은 swing-battle.mp3 / battle.mp3 처럼.
  * audio/*.mp3 는 tools/music/compose.py 로 작곡한 오리지널 곡을 실제 악기 샘플(FluidR3_GM 사운드폰트)로 렌더링한 것.
  *   battle  : 평소 전투 (164bpm) — 신스 도입 → 호른 선율 + 기타 뮤트 → 트럼펫·신스 리드·기타 질주·합창이 터지는 격정 파트
  *   pinch   : 체력이 낮을 때 (184bpm) — 트레몰로 현악, 신스 베이스 펄스, 팀파니·기타 스탭, 트럼펫 고음 선율
@@ -13,7 +13,7 @@
   const VOL = 0.5;
   const FADE = 1.0;
   const BASE = 'audio/';
-  const VER = '?v=20260925-12';
+  const VER = '?v=20260925-13';
   // tools/music/out/loops.json 과 같은 값 (초)
   const LOOPS = {
     'battle': { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },
@@ -22,8 +22,6 @@
     'swing-battle': { loopStart: 13.714285714285714, loopEnd: 61.714285714285715 },
     'swing-pinch': { loopStart: 1.4634146341463414, loopEnd: 24.878048780487806 },
     'swing-victory': null,
-    'swing2-battle': { loopStart: 13.714285714285714, loopEnd: 61.714285714285715 },
-    'swing2-victory': null,
   };
 
   let ctx = null, out = null;
@@ -34,13 +32,11 @@
   try {
     muted = localStorage.getItem('pdeb-mute') === '1';
     const saved = localStorage.getItem('pdeb-bgm');
-    if (saved === 'orch' || saved === 'swing2') style = saved;
+    if (saved === 'orch') style = saved;
   } catch (e) { /* 저장소 없음 */ }
-  const STYLES = ['swing', 'swing2', 'orch'];
-  /** 'battle' → 'swing-battle' (일렉트로스윙) · 'swing2-battle' (밝은 장조, 임시 — 위기 테마는 swing 과 같이 씀) · 'battle' (오케스트라 록) */
-  const file = n => (style === 'swing' ? 'swing-' + n
-    : style === 'swing2' ? (n === 'pinch' ? 'swing-pinch' : 'swing2-' + n)
-    : n);
+  const STYLES = ['swing', 'orch'];
+  /** 'battle' → 'swing-battle' (일렉트로스윙) 또는 'battle' (오케스트라 록) */
+  const file = n => (style === 'swing' ? 'swing-' + n : n);
 
   function init() {
     if (ctx) return true;

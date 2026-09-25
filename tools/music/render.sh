@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 SF=${SF:-/usr/share/sounds/sf2/FluidR3_GM.sf2}
 python3 compose.py > /dev/null
 mkdir -p ../../audio
-for n in battle pinch victory swing-battle swing-pinch swing-victory swing2-battle swing2-victory; do
+for n in battle pinch victory swing-battle swing-pinch swing-victory; do
   fluidsynth -ni -q -g 0.35 -r 44100 -O float \
     -o synth.reverb.room-size=0.75 -o synth.reverb.damp=0.35 -o synth.reverb.width=0.9 -o synth.reverb.level=0.8 \
     -o synth.chorus.active=0 \
