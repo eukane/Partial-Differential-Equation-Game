@@ -38,14 +38,22 @@ KICK, CLAP, SNARE, CHAT, OHAT, CRASH, RIDE, CHINA, SPLASH = 36, 39, 38, 42, 46, 
 TOM_L, TOM_M, TOM_H = 41, 45, 48
 
 QUAL = {'m6': [0, 3, 7, 9], '7': [0, 4, 7, 10], 'm7b5': [0, 3, 6, 10], 'M6': [0, 4, 7, 9], 'm7': [0, 3, 7, 10], 'm': [0, 3, 7]}
-ROOT = {'C': 36, 'D': 38, 'Eb': 39, 'E': 40, 'F': 41, 'G': 43, 'A': 45, 'Bb': 46, 'B': 47}
+ROOT = {'C': 36, 'D': 38, 'Eb': 39, 'E': 40, 'F': 41, 'F#': 42, 'G': 43, 'G#': 44, 'A': 45, 'Bb': 46, 'B': 47}
 
 
 def chord(name):
+    """'Am7' → (근음, 구성음 간격). 'Am/G' 같은 분수 화음은 화음 부분만"""
+    name = name.split()[0].split('/')[0]  # 마디 전체('Am Am/G …')를 받으면 첫 화음
     for q in ('m7b5', 'm6', 'M6', 'm7', '7', 'm'):
         if name.endswith(q):
             return ROOT[name[:-len(q)]], QUAL[q]
     return ROOT[name], [0, 4, 7]
+
+
+def bass_of(name):
+    """베이스 음: 분수 화음이면 / 뒤의 음, 아니면 근음"""
+    name = name.split()[0]
+    return ROOT[name.split('/')[1]] if '/' in name else chord(name)[0]
 
 
 def tones(name, octave=4):
@@ -66,9 +74,9 @@ def play_line(s, ch, b, line, vel, shift=0):
 
 
 def bar_chords(spec):
-    """'Dm6' 또는 'Em7b5 A7' (반 마디씩)"""
+    """'Am' · 'Dm7 E7'(반 마디씩) · 'Am Am/G Am/F# E7/G#'(한 박씩)"""
     parts = spec.split()
-    return [(0, parts[0])] if len(parts) == 1 else [(0, parts[0]), (8, parts[1])]
+    return [(16 * i // len(parts), c) for i, c in enumerate(parts)]
 
 
 def rhythm(s, b, spec, sec, kick=True, stop=False, hats=True):
@@ -83,7 +91,7 @@ def rhythm(s, b, spec, sec, kick=True, stop=False, hats=True):
                     s.n('pompe', at, m + 12, 0.9, 96)
             continue
         name = [c for st, c in chords if st <= beat * 4][-1]
-        r, _ = chord(name)
+        r = bass_of(name)
         tn = tones(name, 3)
         # 라 퐁프: 매 박 짧게, 2·4박 강하게
         for m in tn[1:]:
@@ -92,17 +100,20 @@ def rhythm(s, b, spec, sec, kick=True, stop=False, hats=True):
             for m in tn[1:]:
                 s.n('pompe', at + 8 / 3, m + 12, 0.6, 40)
         # 콘트라베이스 워킹: 근음 · 5음 · 옥타브 · 다음 코드로 반음 접근
-        walk = [r, r + 7, r + 12, r + 11 if beat == 3 else r + 7]
-        s.n('upright', at, walk[beat] - 12 if walk[beat] > 50 else walk[beat], 3.2, 100)
+        # 한 박씩 바뀌는 화음(라인 클리셰)이나 분수 화음이면 베이스가 그 음을 그대로 걷는다
+        walk = [r] * 4 if (len(chords) == 4 or '/' in name) else [r, r + 7, r + 12, r + 11 if beat == 3 else r + 7]
+        s.n('upright', at, walk[beat] - 12 if walk[beat] > 50 else walk[beat], 3.2, 104)
         if sec >= 1:
             # 오프비트 신스 베이스 (킥 사이를 채워 '쿵짝' 탄력)
             s.n('sbass', at + 2, r, 1.6, 96 if sec == 2 else 80)
         if sec >= 1 and kick:
             s.n('drums', at, KICK, 1, 120)
             if hats:
-                s.n('drums', at + 2, OHAT, 1, 72 if sec == 1 else 86)
-                s.n('drums', at, CHAT, 1, 50)
-                s.n('drums', at + 8 / 3, CHAT, 1, 44)
+                s.n('drums', at + 2, OHAT, 1, 90 if sec == 1 else 108)
+                s.n('drums', at, CHAT, 1, 64)
+                s.n('drums', at + 8 / 3, CHAT, 1, 60)
+                if sec == 2:
+                    s.n('drums', at + 10 / 3, CHAT, 1, 84)  # 박 끝에서 밀어 주는 하이햇 (레퍼런스 그루브)
             if beat % 2:
                 s.n('drums', at, CLAP, 1, 100)
                 if sec == 2:
@@ -113,8 +124,9 @@ def rhythm(s, b, spec, sec, kick=True, stop=False, hats=True):
 
 
 def pad_and_piano(s, b, spec, sec):
-    for st, name in bar_chords(spec):
-        ln = 16 - st if len(bar_chords(spec)) == 1 else 8
+    parts = bar_chords(spec)
+    for k, (st, name) in enumerate(parts):
+        ln = (parts[k + 1][0] if k + 1 < len(parts) else 16) - st
         if sec == 2:
             for m in tones(name, 4):
                 s.n('spad', b * 16 + st, m, ln, 80)
@@ -134,19 +146,17 @@ def charleston(s, b, spec, vel):
 
 
 # ---------------------------------------------------------------- swing-battle
-# m6 화음·클라리넷 독주는 '마법학교' 같은 기묘한 느낌이 나서, m7 화음 + 금관·색소폰 블루스 리프로 신나게
-PROG = ['Dm7', 'Dm7', 'Gm7', 'A7', 'Dm7', 'Bb7', 'Gm7 A7', 'Dm7 A7']
-# 드롭 리프: 같은 음을 두 번 '빠빰' 찍고 튀어 오르는 스윙 샤우트 (D 블루스 스케일)
-RIFF = [
-    [(0, 81, 1), (1, 81, 1), (2, 77, 1), (3, 81, 2), (5, 84, 1), (6, 81, 2)],
-    [(0, 79, 1), (1, 77, 1), (2, 74, 1), (3, 77, 2), (5, 74, 1), (6, 72, 1), (7, 74, 1)],
-    [(0, 82, 1), (1, 82, 1), (2, 79, 1), (3, 82, 2), (5, 86, 1), (6, 82, 2)],
-    [(0, 85, 1), (1, 84, 1), (2, 81, 1), (3, 79, 1), (4, 76, 2), (6, 73, 2)],
-    [(0, 81, 1), (1, 81, 1), (2, 77, 1), (3, 81, 2), (5, 84, 1), (6, 81, 2)],
-    [(0, 86, 1), (1, 86, 1), (2, 82, 1), (3, 86, 2), (5, 89, 1), (6, 86, 2)],
-    [(0, 82, 1), (1, 79, 1), (2, 77, 1), (3, 74, 1), (4, 85, 1), (5, 81, 1), (6, 79, 1), (7, 76, 1)],
-    [(0, 74, 3)],
-]
+# A단조. 드롭은 레퍼런스처럼 베이스가 한 박씩 A → G → F# → G# 로 걷는 '마이너 라인 클리셰'
+LC = 'Am Am/G Am/F# E7/G#'
+LC2 = 'Am/F# Am/F# E7 E7/G#'
+PROG = [LC, LC, LC, LC2, LC, LC, LC, LC2]
+HALF = ['Am', 'Am/G', 'Am/F#', 'E7/G#']  # 도입·브레이크다운: 한 마디에 한 음씩 천천히
+_RA = [(0, 81, 1), (1, 81, 1), (2, 76, 1), (3, 81, 2), (5, 84, 1), (6, 83, 1), (7, 80, 1)]
+_RB = [(0, 81, 1), (1, 79, 1), (2, 76, 2), (4, 78, 1), (5, 76, 1), (6, 74, 1), (7, 71, 1)]
+_RD = [(0, 84, 1), (1, 84, 1), (2, 81, 1), (3, 78, 2), (5, 81, 1), (6, 80, 1), (7, 76, 1)]
+RIFF = [_RA, _RB, _RA, _RD, _RA, _RB, _RA, [(0, 81, 3)]]
+# 색소폰 솔로는 i-iv-V 로 (예전 D단조 솔로를 A단조로 옮김)
+SOLO_PROG = ['Am7', 'Am7', 'Dm7', 'E7', 'Am7', 'F7', 'Dm7 E7', 'Am7 E7']
 
 
 def call(root):
@@ -166,7 +176,7 @@ def groove_extras(s, b, i, shaker=True, claps=True):
     """셰이커(스윙 8분) · 2·4박 박수"""
     if shaker:
         for e in range(8):
-            s.n('drums', b * 16 + e8(e), 70, 0.8, 58 + (16 if e % 2 == 0 else 0))
+            s.n('drums', b * 16 + e8(e), 70, 0.8, 76 + (20 if e % 2 == 0 else 0))
     if claps:
         for q in (4, 12):
             s.n('drums', b * 16 + q, CLAP, 1, 92)
@@ -221,11 +231,14 @@ SOLO = [
 ]
 
 
+SOLO_A = [([(e, m - 5, ln) for e, m, ln in line], [(st, [m - 5 for m in ns]) for st, ns in runs]) for line, runs in SOLO]
+
+
 def swing_battle():
     s = Song(140, SWING)
     bar = 0
     # 도입 4마디: 킥·신스 베이스는 아껴 두고, 금관·색소폰 콜 & 리스폰스 + 박수·셰이커로 처음부터 들썩이게
-    for i, c in enumerate(PROG[:4]):
+    for i, c in enumerate(HALF):
         b = bar + i
         rhythm(s, b, c, 0)
         pad_and_piano(s, b, c, 1)
@@ -240,7 +253,7 @@ def swing_battle():
         for q in range(4):
             s.n('drums', b * 16 + q * 4 + 2, OHAT, 1, 54)
     s.n('drums', 0, CRASH, 12, 96)
-    run16(s, 'piano', 0, 0, [62, 65, 69, 72, 74, 77, 81, 84], 84)
+    run16(s, 'piano', 0, 0, [57, 60, 64, 69, 72, 76, 81, 84], 84)
     bar += 4
     # 빌드업 4마디: 4박 킥 + 오프비트 하이햇 + 신스 베이스, 트럼펫·색소폰 콜이 마디마다, 마지막은 스톱 + 라이저
     for i, c in enumerate(PROG[4:]):
@@ -285,12 +298,12 @@ def swing_battle():
         build_up(s, b0 + 7)
 
     def solo(b0):
-        for i, c in enumerate(PROG):
+        for i, c in enumerate(SOLO_PROG):
             b = b0 + i
             last = i == 7
             rhythm(s, b, c, 2, stop=last)
             pad_and_piano(s, b, c, 2)
-            line, runs = SOLO[i]
+            line, runs = SOLO_A[i]
             play_line(s, 'sax', b, line, 120)
             for st, notes in runs:
                 run16(s, 'sax', b, st, notes, 112)
@@ -307,7 +320,7 @@ def swing_battle():
 
     def breakdown(b0):
         # 킥·하이햇을 빼고 박수·셰이커·금관 콜로 → 3마디째 킥 복귀 → 4마디째 스톱 + 빌드업
-        for i, c in enumerate(PROG[:4]):
+        for i, c in enumerate(HALF):
             b = b0 + i
             last = i == 3
             rhythm(s, b, c, 1, kick=(i == 2), hats=False, stop=last)
@@ -332,7 +345,7 @@ def swing_battle():
     # 반복 지점 뒤: 첫 드롭의 '팡' 을 한 번 더 (잔향용)
     rhythm(s, bar, PROG[0], 2)
     slam(s, bar, PROG[0])
-    s.save('swing-battle')
+    s.save('swing-battle', stems=True)
     return {'loopStart': s.sec(loop_start), 'loopEnd': s.sec(loop_end)}
 
 
@@ -352,6 +365,7 @@ PMEL = [
 
 def swing_pinch():
     s = Song(164, SWING)
+    s.tp = -5  # D단조 → A단조 (전투곡과 같은 조)
     # 예비 1마디: 스톱 + 빌드업 → 반복 구간 첫 박이 '팡'
     rhythm(s, 0, 'A7', 2, stop=True)
     build_up(s, 0)
@@ -392,13 +406,14 @@ def swing_pinch():
     half(bar, True); bar += 8
     rhythm(s, bar, PPROG[0], 2)
     slam(s, bar, PPROG[0])
-    s.save('swing-pinch')
+    s.save('swing-pinch', stems=True)
     return {'loopStart': s.sec(1), 'loopEnd': s.sec(17)}
 
 
 # ---------------------------------------------------------------- swing-victory
 def swing_victory():
     s = Song(140, SWING)
+    s.tp = -5
     # 금관 쇼트 → D장6 화음으로 '짜잔' + 드럼 필
     hits = [(0, 'Gm6'), (8 / 3, 'A7'), (6, 'A7')]
     for at, c in hits:
@@ -423,7 +438,7 @@ def swing_victory():
     s.n('drums', end, KICK, 1, 120)
     s.n('boom', end, 36, 8, 127)
     s.n('drums', end, CHINA, 8, 110)
-    s.save('swing-victory')
+    s.save('swing-victory', stems=True)
     return {}
 
 

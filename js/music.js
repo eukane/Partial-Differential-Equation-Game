@@ -13,7 +13,7 @@
   const VOL = 0.5;
   const FADE = 1.0;
   const BASE = 'audio/';
-  const VER = '?v=20260925-13';
+  const VER = '?v=20260925-14';
   // tools/music/out/loops.json 과 같은 값 (초)
   const LOOPS = {
     'battle': { loopStart: 29.26829268292683, loopEnd: 52.68292682926829 },

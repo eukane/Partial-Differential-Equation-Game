@@ -72,9 +72,12 @@ class Song:
         self.ch = {k: v for k, v in CH.items() if v[0] not in taken}
         self.ch.update(extra)
         self.ev = []  # (tick, 순서, msg)
+        self.tp = 0   # 조옮김 (드럼 제외)
 
     def n(self, ch, at16, midi, len16, vel):
         c = self.ch[ch][0]
+        if c != 9:
+            midi += self.tp
         t0 = int(round(at16 * T16))
         t1 = t0 + max(1, int(round(len16 * T16)) - 8)
         vel = max(1, min(127, int(vel)))
@@ -89,7 +92,19 @@ class Song:
         for i in range(steps + 1):
             self.cc(ch, at16 + len16 * i / steps, ctl, v0 + (v1 - v0) * i / steps)
 
-    def save(self, name):
+    def save(self, name, stems=False):
+        """stems=True: 믹스용으로 음악(드럼 제외)·드럼만 따로, 킥 시각(json) 도 저장 → render.sh 에서 사이드체인"""
+        self._write(name, lambda m: True)
+        if stems:
+            self._write(name + '.music', lambda m: getattr(m, 'channel', 0) != 9)
+            self._write(name + '.drums', lambda m: getattr(m, 'channel', 9) == 9)
+            spt = 60 / self.bpm / PPQ
+            kicks = [(t * spt, m.velocity) for t, _, m in self.ev
+                     if m.type == 'note_on' and m.channel == 9 and m.note == 36 and m.velocity > 0]
+            with open(os.path.join(OUT, name + '.kicks.json'), 'w') as f:
+                json.dump(sorted(kicks), f)
+
+    def _write(self, name, keep):
         mid = mido.MidiFile(type=0, ticks_per_beat=PPQ)
         tr = mido.MidiTrack()
         mid.tracks.append(tr)
@@ -101,9 +116,11 @@ class Song:
                 tr.append(mido.Message('control_change', channel=c, control=ctl, value=val, time=0))
         last = 0
         for t, _, m in sorted(self.ev, key=lambda e: (e[0], e[1])):
+            if not keep(m):
+                continue
             tr.append(m.copy(time=t - last))
             last = t
-        end = max(t for t, _, _ in self.ev) + PPQ * 8  # 잔향 여유
+        end = max(t for t, _, _ in self.ev) + PPQ * 8  # 잔향 여유 (스템끼리 길이를 맞춘다)
         tr.append(mido.MetaMessage('end_of_track', time=end - last))
         os.makedirs(OUT, exist_ok=True)
         mid.save(os.path.join(OUT, name + '.mid'))
