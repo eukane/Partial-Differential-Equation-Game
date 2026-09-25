@@ -795,7 +795,7 @@
     ricochet: { icon: '🌀', name: '도탄', desc: '조준 방향으로 쏘면 벽에 3번 튕기며 관통. 튕긴 탄에 자신도 맞을 수 있음', aim: true, dmg: { easy: 20, hard: 28 } },
     bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 20, hard: 28 } },
     rook:     { icon: '➕', name: '룩', desc: '가로·세로 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 20, hard: 28 } },
-    knight:   { icon: '🐴', name: '나이트', desc: '나이트가 갈 수 있는 L자 칸 8곳을 동시에 타격', dmg: { easy: 42, hard: 54 } },
+    knight:   { icon: '🐴', name: '나이트', desc: 'L자 칸(체스 나이트 이동)을 골라 뛰어들어, 착지한 곳 주변 8칸의 적을 모두 타격', target: true, dmg: { easy: 34, hard: 44 } },
     king:     { icon: '👑', name: '킹', desc: '주변 8칸을 강타', dmg: { easy: 35, hard: 45 } },
     mortar:   { icon: '💣', name: '박격포', desc: '5칸 안의 칸을 골라 3×3 폭발 (가장자리 60%). 범위 안이면 자신도 맞음', target: true, dmg: { easy: 25, hard: 35 } },
     scatter:  { icon: '🎲', name: '난사', desc: '무작위 좌표로 발사, 벽에 3번 튕기며 관통. 운에 맡기는 한 방', dmg: { easy: 30, hard: 40 } },
@@ -916,6 +916,11 @@
     }
     return out;
   }
+  const KNIGHT_JUMPS = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
+  /** 나이트가 뛰어들 수 있는 칸: L자 칸 중 판 안의 빈 칸 */
+  function knightCells(p) {
+    return KNIGHT_JUMPS.map(([dx, dy]) => [p.x + dx, p.y + dy]).filter(([x, y]) => inB(x, y) && !at(x, y));
+  }
   function mortarCells(p) {
     const out = [];
     for (let y = 0; y < N; y++) {
@@ -954,6 +959,11 @@
       Net.status('💣 폭격할 칸 고르는 중…');
       Net.live({ st: 'cell', key });
       act.tgt = await pickCell(mortarCells(p), '💣 박격포', '폭격할 칸을 판에서 누르세요. 3×3 범위 안에 자신이 있으면 같이 맞아요.', '#ff5d6c');
+    }
+    if (q.ok && key === 'attack' && p.style === 'knight' && knightCells(p).length) {
+      Net.status('🐴 뛰어들 칸 고르는 중…');
+      Net.live({ st: 'cell', key });
+      act.tgt = await pickCell(knightCells(p), '🐴 나이트', '뛰어들 L자 칸을 판에서 누르세요. 착지한 곳 주변 8칸의 적을 모두 때려요.', p.color);
     }
     Net.status(null);
     Net.live(null);
@@ -1301,11 +1311,13 @@
       case 'ricochet': ray(p.ang, { bounces: 3, pierce: true }); break;
       case 'bishop': [45, 135, 225, 315].forEach(a => ray(a)); break;
       case 'rook': [0, 90, 180, 270].forEach(a => ray(a)); break;
-      case 'knight':
-        [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]].forEach(([dx, dy]) => {
-          if (inB(p.x + dx, p.y + dy)) cells.push([p.x + dx, p.y + dy, 1]);
-        });
+      case 'knight': {
+        // 착지한 칸(없으면 제자리) 주변 8칸
+        const [cx, cy] = target || [p.x, p.y];
+        ring(cx, cy);
+        for (let i = cells.length - 1; i >= 0; i--) if (cells[i][0] === cx && cells[i][1] === cy) cells.splice(i, 1);
         break;
+      }
       case 'king':
         ring(p.x, p.y);
         for (let i = cells.length - 1; i >= 0; i--) if (cells[i][0] === p.x && cells[i][1] === p.y) cells.splice(i, 1);
@@ -1351,6 +1363,16 @@
     const on = p && p.alive && S.phase === 'choose';
     el.cells.classList.toggle('aimable', !!on && myTurn());
     if (!on || !p.style) return;
+    if (p.style === 'knight') {
+      // 뛰어들 수 있는 L자 칸과, 그중 어디로든 뛰어들면 때릴 수 있는 적
+      const marked = new Set();
+      for (const [x, y] of knightCells(p)) {
+        svg('rect', { class: 'guide-cell', x: x + 0.1, y: y + 0.1, width: 0.8, height: 0.8, stroke: p.color });
+        for (const q of enemies(p)) if (Math.max(Math.abs(q.x - x), Math.abs(q.y - y)) === 1) marked.add(q);
+      }
+      for (const q of marked) svg('circle', { class: 'guide-hit', cx: q.x + 0.5, cy: q.y + 0.5, r: 0.46 });
+      return;
+    }
     const plan = planAttack(p, p.style, null);
     const marked = new Set();
     for (const r of plan.rays) {
@@ -1396,7 +1418,22 @@
     } else {
       toast(`${s.icon} ${s.name}!`);
     }
-    const plan = planAttack(p, p.style, tgt);
+    if (p.style === 'knight') {
+      // 공격 시점에 다시 확인 (난전에서는 그사이 누가 그 칸에 들어왔을 수 있다) → 안 되면 제자리에서 내려찍기
+      const ok = tgt && KNIGHT_JUMPS.some(([dx, dy]) => p.x + dx === tgt[0] && p.y + dy === tgt[1]) && inB(tgt[0], tgt[1]) && !at(tgt[0], tgt[1]);
+      if (ok) {
+        await animatePath([[p.x + 0.5, p.y + 0.5], [(p.x + tgt[0]) / 2 + 0.5, (p.y + tgt[1]) / 2 + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], p.color, 14);
+        burst(p.x + 0.5, p.y + 0.5, p.color);
+        [p.x, p.y] = tgt;
+        renderPieces();
+        updateCamera();
+        log(`${tag(p)} 🐴 ${coord(p.x, p.y)} 로 뛰어들었다`);
+        await sleep(300);
+      }
+      tgt = null;
+      if (cross) { cross.remove(); cross = null; }
+    }
+    const plan = planAttack(p, p.style, p.style === 'knight' ? [p.x, p.y] : tgt);
     let hitCount = 0;
     await Promise.all(plan.rays.map(r => animatePath(r.pts, p.color, 12, r.hits.map(h => ({
       d: h.d,
@@ -1410,6 +1447,7 @@
     if (plan.cells.length) {
       if (p.style === 'mortar') await animatePath([[p.x + 0.5, p.y + 0.5], [tgt[0] + 0.5, tgt[1] + 0.5]], '#ff9f43', 10);
       for (const [x, y] of plan.cells) burst(x + 0.5, y + 0.5, p.style === 'mortar' ? '#ff9f43' : p.style === 'whirl' ? '#9be7ff' : p.color);
+      if (p.style === 'knight') toast(`${s.icon} 착지!`, 900);
       await sleep(250);
       for (const [x, y, w] of plan.cells) {
         const q = at(x, y);
