@@ -2901,8 +2901,17 @@
         b.onclick = () => this.restore(h);
       }
       // 초대 링크(#방코드)로 열었으면 바로 방에 들어간다 (닉네임이 없으면 자동으로 지어 주고, 로비에서 바꿀 수 있다)
+      const last = store.get('pdeb-room');
+      const rejoin = !hash && last && /^[A-Z0-9]{4}$/.test(last.code || '') && Date.now() - (last.at || 0) < 3 * 3600e3 ? last.code : '';
       if (/^[A-Z0-9]{4}$/.test(hash) && !(h && h.code === hash)) {
         if (!cleanText($('#nick').value, 10)) $('#nick').value = autoNick();
+        setTimeout(() => this.join(), 50);
+      } else if (rejoin || (hash && h && h.code === hash)) {
+        // 새로고침·앱이 페이지를 다시 연 경우: 하던 방으로 바로 돌아간다
+        $('#joinCode').value = rejoin || hash;
+        if (!cleanText($('#nick').value, 10)) $('#nick').value = autoNick();
+        toast('하던 방으로 돌아가는 중…', 2500);
+        this.autoRejoin = true;
         setTimeout(() => this.join(), 50);
       } else if (hash) $('#nick').focus();
       // 이미 열어 둔 페이지에서 초대 링크를 또 열면(주소의 #만 바뀜) 그 방으로
@@ -2918,6 +2927,7 @@
       setInterval(() => this.tick(), 1500);
       document.addEventListener('visibilitychange', () => {
         if (!this.room || !S.online) return;
+        if (document.hidden) this.handOff();
         this.room.presence({ away: document.hidden ? 1 : 0, hb: Date.now() }).catch(() => {});
         if (!document.hidden) this.tick();
       });
@@ -2930,6 +2940,7 @@
       const now = Date.now();
       this.beat = (this.beat || 0) + 1;
       if (this.beat % 2 === 0) this.room.presence({ hb: now, away: document.hidden ? 1 : 0 }).catch(() => {});
+      if (this.beat % 20 === 0) store.set('pdeb-room', { code: o.code, at: now });
       this.trackPeers();
       if (o.phase === 'lobby' && !o.host) { this.watchLobbyHost(now); return; }
       if (o.phase !== 'game') return;
@@ -2996,17 +3007,24 @@
       const next = o.seats.findIndex((x, i) => i !== hostSeat && !x.b && this.seatActive(i));
       if (next === o.mySeat) this.takeOver();
     },
-    takeOver() {
+    takeOver(handed = false) {
       const o = S.online;
       o.host = true;
+      o.pending = null;
       o.epoch = (this.hostEpoch || 0) + 1;
       this.hostEpoch = o.epoch;
       o.hist = []; o.acts = []; o.act = null; o.base = snapshot();
       this.queue = []; this.handled = {}; this.awaySince = {};
+      // 옛 방장이 이미 처리한 요청(최근 행동 목록)은 다시 받지 않는다
+      for (const a of (this.recentActs || []).map(cleanAct).filter(Boolean)) {
+        if (a.n) (this.handled[a.actor] || (this.handled[a.actor] = new Set())).add(a.n);
+      }
       this.hostDownSince = 0;
       this.publish();
-      log('👑 방장이 자리를 비워서 이 기기가 방장을 이어받았어요.');
-      toast('👑 방장이 자리를 비워서 이 기기가 방장을 이어받았어요', 3500);
+      if (!handed) {
+        log('👑 방장이 자리를 비워서 이 기기가 진행을 이어받았어요.');
+        toast('👑 방장이 자리를 비워서 이 기기가 진행을 이어받았어요', 3000);
+      }
       // 방장에게 보내 두었던 내 행동이 있으면 이어서 처리
       const r = this.myReq;
       this.myReq = null;
@@ -3017,6 +3035,56 @@
       this.hostScan();
       if (brawl()) startBrawlBots(); else scheduleBot();
       renderAll();
+    },
+    /**
+     * 방장이 화면을 내리면(앱 전환·화면 끔) 지금 화면을 보고 있는 다음 사람에게 방장 역할을 바로 넘긴다.
+     * 최근 상태(base + 행동 목록)를 함께 넘겨서, 받은 사람이 따라잡은 뒤 이어서 진행한다.
+     * 나는 참가자가 되므로 돌아와도 새 방장을 따라가기만 하면 된다 (되돌아가는 일이 없다).
+     */
+    handOff() {
+      const o = S.online;
+      if (!o || !o.host || o.phase !== 'game') return;
+      // 처리 중인 행동·줄 선 요청이 있으면 다 끝난 뒤에 넘긴다 (그사이 멈추면 평소의 이어받기가 맡는다)
+      if (S.applying || (this.queue && this.queue.length)) { this.handoffWanted = true; return; }
+      this.handoffWanted = false;
+      const t = o.seats.findIndex((x, i) => i !== o.mySeat && !x.b && this.seatActive(i));
+      if (t < 0) return;   // 넘겨줄 사람이 없으면 그대로 (돌아와서 이어 하면 된다)
+      const ep = (o.epoch | 0) + 1;
+      o.host = false;
+      o.pending = null;
+      this.hostEpoch = ep;
+      this.hostDownSince = 0;
+      clearInterval(S.brawlBotTimer); clearTimeout(S.botTimer);
+      this.room.presence({
+        role: 'guest', join: 1, seats: null, ph: null, seq: null, base: null, acts: null, act: null, ep: null, req: null,
+        hand: { to: o.seats[t].k, ep, seq: o.seq, base: o.base, acts: o.acts || [] },
+      }).catch(() => {});
+    },
+    /** 방장 역할을 넘겨받았으면: 넘겨받은 상태까지 따라잡은 뒤 방장이 된다 */
+    checkHand() {
+      const o = S.online;
+      if (!o || o.host || o.phase !== 'game' || o.mySeat < 0) return false;
+      let hand = null;
+      for (const p of this.peersInRoom()) {
+        const h = p.presence.hand;
+        if (h && h.to === this.myKey() && (h.ep | 0) > (this.hostEpoch | 0) && (!hand || (h.ep | 0) > (hand.ep | 0))) hand = h;
+      }
+      // 이미 더 새 방장이 있으면 넘겨받을 필요 없음
+      const hp = this.hostPeer();
+      if (!hand || (hp && (hp.presence.ep | 0) >= (hand.ep | 0))) return false;
+      const seq = int(hand.seq, 0, 1e9);
+      if (o.seq < seq) {
+        if (!S.applying && (!o.pending || o.pending.seq < seq)) {
+          o.pending = { seq, base: hand.base, acts: Array.isArray(hand.acts) ? hand.acts.slice(0, ACT_WINDOW) : [] };
+          this.recentActs = o.pending.acts;
+          this.processPending();
+        }
+        return true;
+      }
+      if (S.applying) return true;
+      this.hostEpoch = (hand.ep | 0) - 1;
+      this.takeOver(true);
+      return true;
     },
     /** 더 새로운 방장이 있으면 나는 참가자로 돌아간다 (자리 비웠다 돌아온 옛 방장) */
     maybeDemote() {
@@ -3169,6 +3237,7 @@
       let code = '';
       for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
       if (!(await this.connect(code))) return;
+      store.set('pdeb-room', { code, at: Date.now() });
       S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn', hp: S.maxHp, exp: !!($('#optExp') && $('#optExp').checked), rj: !!($('#optRand') && $('#optRand').checked) };
       this.publish();
       showLobby();
@@ -3178,8 +3247,11 @@
       this.nick = cleanText(h.nick, 10) || '방장';
       const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
       if (!seats.length) return;
-      seats[0].k = this.myKey();
-      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP), exp: !!h.exp, rj: !!h.rj };
+      // 진행을 이어받았던 기기라면 내 자리는 0번이 아닐 수 있다
+      let mySeat = seats.findIndex(x => x.k === this.myKey());
+      if (mySeat < 0) { mySeat = 0; seats[0].k = this.myKey(); }
+      store.set('pdeb-room', { code: h.code, at: Date.now() });
+      S.online = { code: h.code, host: true, seats, mySeat, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP), exp: !!h.exp, rj: !!h.rj };
       this.queue = []; this.handled = {};
       if (S.online.phase === 'game') {
         this.enterGame();
@@ -3276,24 +3348,33 @@
       if (!this.readNick()) return;
       if (!(await this.connect(code))) return;
       S.online = { code, host: false, seats: [], mySeat: -1, phase: 'joining', seq: -1, pending: null, timer: true, mode: 'turn' };
+      store.set('pdeb-room', { code, at: Date.now() });
       this.room.presence({ app: APP, room: code, role: 'guest', uid: this.uid, nick: this.nick, join: 1, req: null, doing: null })
         .catch(() => toast('방에 신호를 보내지 못했어요', 2500));
       showLobby();
       setTimeout(() => {
-        if (S.online && S.online.code === code && S.online.phase === 'joining') renderLobby('방 ' + code + '을(를) 찾지 못했어요. 코드가 맞는지, 방장이 게임 페이지를 열어 두었는지 확인하세요.');
+        if (!S.online || S.online.code !== code || S.online.phase !== 'joining') return;
+        // 아무도 진행하고 있지 않은데 내가 이 방의 마지막 방장이었다면, 저장해 둔 상태로 다시 연다
+        const hs = store.get(HOST_SAVE);
+        if (hs && hs.code === code && Date.now() - (hs.at || 0) < 3 * 3600e3) { this.autoRejoin = false; this.leaveQuiet(); this.restore(hs); return; }
+        if (this.autoRejoin) { this.autoRejoin = false; this.leave(); toast('예전 방은 끝났어요. 새로 만들거나 참가하세요.', 3000); return; }
+        renderLobby('방 ' + code + '을(를) 찾지 못했어요. 코드가 맞는지, 방장이 게임 페이지를 열어 두었는지 확인하세요.');
       }, 6000);
     },
     guestSync() {
       const o = S.online;
+      if (this.checkHand()) return;
       const hp = this.hostPeer();
       if (!hp) {
         if (o.phase === 'game' && !this.hostMissingSince) {
           this.hostMissingSince = Date.now();
-          setTimeout(() => { if (S.online && !this.hostPeer()) toast('방장 연결이 끊겼어요. 방장이 돌아오면 이어집니다.', 4000); }, 2500);
+          setTimeout(() => { if (S.online && !S.online.host && !this.hostPeer()) toast('진행 담당 기기를 다시 찾는 중… 잠시만요', 3000); }, 5000);
         }
         return;
       }
+      if (this.room && (hp.presence.ep | 0) >= (this.hostEpoch | 0) && this.room.peers().some(p => p.isMe && p.presence && p.presence.hand)) this.room.presence({ hand: null }).catch(() => {});
       this.hostMissingSince = 0;
+      this.autoRejoin = false;
       const h = hp.presence;
       this.hostEpoch = h.ep | 0;
       o.seats = (Array.isArray(h.seats) ? h.seats : []).slice(0, MAX_PLAYERS).map(x => ({ k: cleanText(x && x.k, 60), n: cleanText(x && x.n, 10) || '플레이어', b: x && x.b ? 1 : 0 }));
@@ -3318,6 +3399,7 @@
       const seq = int(h.seq, 0, 1e9);
       if (seq > o.seq) {
         o.pending = { seq, base: h.base, acts: Array.isArray(h.acts) ? h.acts.slice(0, ACT_WINDOW) : (h.act ? [h.act] : []) };
+        this.recentActs = o.pending.acts;
         this.processPending();
       } else renderAll();
     },
@@ -3466,14 +3548,23 @@
     afterApply() {
       const o = S.online;
       if (!o) return;
-      if (o.host) { this.publishSaveOnly(); this.hostScan(); if (brawl()) this.pump(); }
-      else this.processPending();
+      if (o.host) {
+        this.publishSaveOnly();
+        if (this.handoffWanted && document.hidden && !(this.queue && this.queue.length)) { this.handOff(); return; }
+        this.hostScan(); if (brawl()) this.pump();
+      } else if (!this.checkHand()) this.processPending();
     },
     publishSaveOnly() {
       const o = S.online;
       store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, rj: o.rj ? 1 : 0, cur: snapshot(), at: Date.now() });
     },
+    /** 참가 시도만 조용히 거두기 (다시 열기 전에) */
+    leaveQuiet() {
+      if (this.room) this.room.presence({ role: null, join: null, req: null }).catch(() => {});
+      S.online = null;
+    },
     leave() {
+      store.del('pdeb-room');
       if (this.room) {
         this.room.presence({ app: null, room: null, role: null, seats: null, base: null, act: null, req: null, doing: null, join: null, ph: null, seq: null }).catch(() => {});
       }
@@ -3658,6 +3749,9 @@
       if (e.key === 'ArrowRight') { e.preventDefault(); setAim(cur().ang + step); }
     }
   }
+
+  // 테스트용: 이 기기가 지금 진행을 맡고 있나
+  window.__net = () => !!(S.online && S.online.host);
 
   // 밸런스 시뮬레이션용 (주소에 ?sim 이 있을 때만): AI 끼리 스타일을 정해 붙이고 결과를 읽는다
   if (/[?&]sim\b/.test(location.search)) {
