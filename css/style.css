@@ -506,6 +506,12 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 }
 .spec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .spec-head b { color: var(--pc); }
+.spec-toggle { margin-left: auto; pointer-events: auto; font: inherit; font-size: .78rem; color: var(--text); background: #26304f; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+.spec-time { font-weight: 800; color: var(--accent); background: rgba(0, 0, 0, .3); border-radius: 8px; padding: 2px 8px; }
+.spec-time b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.spec-time.warn { color: #ff5d6c; animation: pulse .5s ease-in-out infinite alternate; }
+.spectate.min { width: auto; max-width: calc(100% - 130px); padding: 6px 10px; border-radius: 999px; }
+.spectate.min .spec-head { flex-wrap: nowrap; white-space: nowrap; }
 .spec-eye { font-size: 1.1rem; }
 .spec-wait { margin: 0; color: var(--muted); }
 .spec-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -641,3 +647,4 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .fx .guide-cell.lock { stroke-dasharray: .1 .08; stroke-width: .05; fill: rgba(255, 203, 61, .12); }
 .stand .guide-label { position: absolute; top: 0; left: 50%; transform: translate(-50%, -85%); font-weight: 800; font-size: calc(var(--cell) * .3); color: #ff5d6c; text-shadow: 0 0 3px #0b1020, 0 0 3px #0b1020, 0 1px 2px #0b1020; white-space: nowrap; pointer-events: none; }
 .nick-row { margin: 6px 0 2px; }
+.spectate.min .spec-head .muted { overflow: hidden; text-overflow: ellipsis; min-width: 0; }

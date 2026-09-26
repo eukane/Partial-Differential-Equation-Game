@@ -701,7 +701,8 @@
       S.specKey = null;
       return;
     }
-    const key = JSON.stringify([S.turn, L.st, L.key, L.q, L.pk]);
+    if (S.specMin == null) S.specMin = !!store.get('pdeb-specmin');
+    const key = JSON.stringify([S.turn, L.st, L.key, L.q, L.pk, S.specMin]);
     if (S.specKey === key) return;
     // 새 문제가 뜬 순간부터 남은 시간을 센다 (기기 시계 차이와 무관)
     if (L.st === 'quiz' && (!S.specQ || S.specQ !== L.q)) { S.specQ = L.q; S.specStart = Date.now(); }
@@ -710,7 +711,11 @@
     const a = actionInfo(['attack', 'move', 'box'].includes(L.key) ? L.key : 'box', p);
     const lv = LEVELS[L.level] ? L.level : 'easy';
     const cat = CAT_KEYS.includes(L.cat) ? L.cat : null;
-    const head = `<div class="spec-head" style="--pc:${p.color}"><span class="spec-eye">👀</span><b>${p.emoji} ${esc(p.name)}</b><span class="muted">${a.icon} ${esc(a.name)}</span></div>`;
+    const timed = L.st === 'quiz' && L.lim;
+    const what = L.st === 'level' ? '고르는 중' : L.st === 'cell' ? '칸 고르는 중' : `${cat ? esc(catInfo(cat).name) + ' ' : ''}${LEVELS[lv].label}`;
+    const head = `<div class="spec-head" style="--pc:${p.color}"><span class="spec-eye">👀</span><b>${p.emoji} ${esc(p.name)}</b><span class="muted">${a.icon} ${esc(a.name)}${S.specMin ? ` · ${what}` : ''}</span>
+      ${timed ? '<span class="spec-time">⏱ <b class="spec-sec"></b>초</span>' : ''}
+      <button class="spec-toggle" aria-label="${S.specMin ? '펼치기' : '최소화'}">${S.specMin ? '▾ 펼치기' : '– 최소화'}</button></div>`;
     let body = '';
     if (L.st === 'level') body = '<p class="spec-wait">과목과 난이도를 고르는 중…</p>';
     else if (L.st === 'cell') body = `<p class="spec-wait">${L.key === 'move' ? '👣 이동할 칸을 고르는 중…' : '💣 폭격할 칸을 고르는 중…'}</p>`;
@@ -725,17 +730,19 @@
         <div class="choices spec-choices">${ch.map((c, i) => `<div class="choice ${res && i === ans ? 'correct' : ''} ${res && i === pk && i !== ans ? 'wrong' : ''}"><span class="key">${i + 1}</span><span class="ctext">${tex(c)}</span></div>`).join('')}</div>
         ${res ? `<div class="verdict ${L.ok ? 'ok' : 'bad'}">${L.ok ? `정답! ${Number(L.sec) || ''}초` : pk === -1 ? '⏰ 시간 초과' : '오답'}</div>` : ''}`;
     }
-    box.innerHTML = head + body;
+    box.innerHTML = head + (S.specMin ? '' : body);
+    box.classList.toggle('min', S.specMin);
     box.hidden = false;
-    const fill = box.querySelector('.timer-fill');
-    if (fill) {
+    box.querySelector('.spec-toggle').onclick = () => { S.specMin = !S.specMin; store.set('pdeb-specmin', S.specMin ? 1 : 0); S.specKey = null; renderSpectate(); };
+    const fill = box.querySelector('.timer-fill'), secEl = box.querySelector('.spec-sec');
+    if (fill || secEl) {
       const limit = Number(L.lim) * 1000;
       const numEl = box.querySelector('.timer-num');
       const tick = () => {
         const left = Math.max(0, limit - (Date.now() - S.specStart));
-        fill.style.transform = `scaleX(${left / limit})`;
-        numEl.textContent = Math.ceil(left / 1000) + 's';
-        fill.classList.toggle('warn', left <= 10000);
+        if (fill) { fill.style.transform = `scaleX(${left / limit})`; fill.classList.toggle('warn', left <= 10000); }
+        if (numEl) numEl.textContent = Math.ceil(left / 1000) + 's';
+        if (secEl) { secEl.textContent = Math.ceil(left / 1000); secEl.parentNode.classList.toggle('warn', left <= 10000); }
       };
       tick();
       S.specTimer = setInterval(tick, 200);
