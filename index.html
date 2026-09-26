@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%99%9F%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <script src="vendor/katex/katex.min.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=20260926-6">
+  <link rel="stylesheet" href="css/style.css?v=20260926-7">
 </head>
 <body>
   <div id="app">
@@ -54,6 +54,7 @@
       <p class="muted">체스인 척하는 수학 난투. 문제 맞히면 때린다! · 자유 조준 · 직업 23종 · 2~5인 · 턴제/난전</p>
       <a class="version-link" href="v2/">🕰️ 이전 버전 (v2)</a> <a class="version-link" href="classic/">· 클래식</a>
       <label class="check"><input type="checkbox" id="optTimer" checked> 제한 시간 사용 (기본 45초 / 심화 75초 / 킬러 120초)</label>
+      <label class="check exp-check"><input type="checkbox" id="optRand"> 🎲 직업 랜덤 <small>시작할 때 직업을 무작위로 받음 (증강 고르기 없음)</small></label>
       <label class="check exp-check"><input type="checkbox" id="optExp"> 🧪 실험 모드 <small>돌·상자 장애물 + 자기장 축소 (테스트 중)</small></label>
       <div class="hp-row" id="hpRow" role="group" aria-label="시작 체력"></div>
       <div class="hp-row" id="bgmRow" role="group" aria-label="배경음악"></div>
@@ -111,10 +112,10 @@
   <div class="overlay hidden" id="modal"><div class="card" id="modalCard"></div></div>
 
   <script src="vendor/mqtt/mqtt.min.js"></script>
-  <script src="js/music.js?v=20260926-6"></script>
-  <script src="js/sfx.js?v=20260926-6"></script>
-  <script src="js/chars.js?v=20260926-6"></script>
-  <script src="js/problems.js?v=20260926-6"></script>
-  <script src="js/game.js?v=20260926-6"></script>
+  <script src="js/music.js?v=20260926-7"></script>
+  <script src="js/sfx.js?v=20260926-7"></script>
+  <script src="js/chars.js?v=20260926-7"></script>
+  <script src="js/problems.js?v=20260926-7"></script>
+  <script src="js/game.js?v=20260926-7"></script>
 </body>
 </html>

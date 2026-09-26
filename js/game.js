@@ -371,11 +371,13 @@
     S.gseed = newSeed();
     S.mode = 'turn';
     S.exp = !!($('#optExp') && $('#optExp').checked);
+    S.randJobs = !!($('#optRand') && $('#optRand').checked);
     initObstacles();
     initCoins();
     el.log.innerHTML = '';
     el.setup.classList.add('hidden');
-    log('🎮 게임 시작! 첫 차례에 증강(공격 스타일)을 고르세요.');
+    log(S.randJobs ? '🎮 게임 시작!' : '🎮 게임 시작! 첫 차례에 증강(공격 스타일)을 고르세요.');
+    assignRandomJobs();
     expIntro();
     renderAll();
     showHandover();
@@ -638,6 +640,14 @@
     if (svgEl && window.Chars) Chars.play(svgEl, st);
   }
 
+  /** 자리 비운 사람 차례: 'N초 뒤 AI 가 대신' */
+  function awayMsg(p) {
+    if (!S.online || brawl() || S.phase !== 'choose') return '';
+    const left = Net.awayLeft(p.id);
+    if (left == null) return '';
+    return left > 0 ? `💤 ${esc(p.name)} 자리 비움 · <b>${left}초</b> 뒤 AI 가 대신 둬요` : `🤖 ${esc(p.name)} 자리 비움 · AI 가 대신 두는 중…`;
+  }
+
   function renderTurn() {
     const p = cur();
     if (!p || S.phase === 'setup' || S.phase === 'over' || S.phase === 'handover') {
@@ -656,7 +666,7 @@
       el.turnPanel.innerHTML = head + `
         <div class="waiting">
           <span class="dots"><i></i><i></i><i></i></span>
-          <span>${S.phase === 'busy' && S.applying ? '행동 진행 중…' : p.bot ? `🤖 ${esc(S.botStatus || '생각 중…')}` : doing ? esc(doing) : `${esc(p.name)} 님이 고르는 중…`}</span>
+          <span>${S.phase === 'busy' && S.applying ? '행동 진행 중…' : p.bot ? `🤖 ${esc(S.botStatus || '생각 중…')}` : awayMsg(p) || (doing ? esc(doing) : `${esc(p.name)} 님이 고르는 중…`)}</span>
         </div>
         <p class="hint">${p.bot ? 'AI 가 알아서 문제를 풀고 행동해요.' : '내 차례가 되면 여기에 행동 버튼이 나타나요.'}</p>`;
       return;
@@ -1219,6 +1229,20 @@
   }
 
   /** 증강 후보: 게임 seed + 플레이어 번호로 정해져 새로고침해도 바뀌지 않는다 */
+  /** 🎲 직업 랜덤 모드: 게임 seed 로 모두에게 서로 다른 직업을 나눠 준다 (모든 화면이 같다) */
+  function assignRandomJobs() {
+    if (!S.randJobs) return;
+    const r = mulberry32((S.gseed ^ 0x6a0b5eed) | 0);
+    const keys = STYLE_KEYS.slice();
+    for (let i = keys.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [keys[i], keys[j]] = [keys[j], keys[i]];
+    }
+    S.players.forEach((p, i) => { p.style = keys[i]; });
+    log('🎲 직업 랜덤! ' + S.players.map(p => `${tag(p)} ${STYLES[p.style].icon} ${STYLES[p.style].name}`).join(' · '));
+    setTimeout(() => toast('🎲 직업 랜덤! ' + S.players.map(p => `${p.name} ${STYLES[p.style].icon}${STYLES[p.style].name}`).join(' · '), 3200), 900);
+  }
+
   function offersFor(p) {
     const r = mulberry32((S.gseed ^ Math.imul(p.id + 1, 2654435761)) | 0);
     const keys = STYLE_KEYS.slice();
@@ -2732,6 +2756,7 @@
     S.players = names.map((nm, i) => makePlayer(i, nm, names.length));
     initObstacles();
     initCoins();
+    assignRandomJobs();
     S.turn = 0; S.round = 1; S.pos = 0; S.extra = false; S.extraActive = false;
     closeModal();
     el.pieces.innerHTML = '';
@@ -2906,9 +2931,35 @@
       this.beat = (this.beat || 0) + 1;
       if (this.beat % 2 === 0) this.room.presence({ hb: now, away: document.hidden ? 1 : 0 }).catch(() => {});
       this.trackPeers();
+      if (o.phase === 'lobby' && !o.host) { this.watchLobbyHost(now); return; }
       if (o.phase !== 'game') return;
       if (o.host) this.coverAway(now);
       else this.watchHost(now);
+      // 자리 비운 사람 차례면 'N초 뒤 AI 가 대신' 을 새로 그린다
+      const p = cur();
+      if (p && !p.bot && !myTurn() && !brawl() && S.phase === 'choose' && !this.seatActive(p.id)) renderTurn();
+    },
+    /** 대기실: 방장이 나가면 자리 순서로 다음 사람이 방장이 되어 게임을 시작할 수 있다 */
+    watchLobbyHost(now) {
+      const o = S.online;
+      const hp = this.hostPeer();
+      if (hp && this.peerActive(hp)) { this.hostDownSince = 0; return; }
+      if (!this.hostDownSince) { this.hostDownSince = now; return; }
+      if (now - this.hostDownSince < 4000 || o.mySeat < 0) return;
+      const next = o.seats.findIndex((x, i) => i !== 0 && !x.b && this.seatActive(i));
+      if (next !== o.mySeat) return;
+      o.host = true;
+      o.epoch = (this.hostEpoch || 0) + 1;
+      this.hostEpoch = o.epoch;
+      const me = o.seats[o.mySeat];
+      o.seats = [me, ...o.seats.filter((x, i) => i !== 0 && i !== o.mySeat)];
+      o.mySeat = 0;
+      o.seq = 0;
+      this.hostDownSince = 0;
+      this.lastSig = '';
+      this.publish();
+      renderLobby();
+      toast('👑 방장이 나가서 이 기기가 방장이 됐어요. 바로 시작할 수 있어요', 3500);
     },
     trackPeers() {
       const now = Date.now();
@@ -2937,7 +2988,10 @@
       const hp = this.hostPeer();
       if (hp && this.peerActive(hp)) { this.hostDownSince = 0; return; }
       if (!this.hostDownSince) { this.hostDownSince = now; return; }
-      if (now - this.hostDownSince < 6000 || S.applying || o.pending || o.mySeat < 0) return;
+      if (now - this.hostDownSince < 4000 || S.applying || o.mySeat < 0) return;
+      // 따라잡지 못한 채 멈춘 대기 상태가 있으면 버리고 내 상태에서 이어간다
+      if (o.pending && now - this.hostDownSince < 8000) return;
+      o.pending = null;
       const hostSeat = hp ? this.seatIndexOf(hp) : -1;
       const next = o.seats.findIndex((x, i) => i !== hostSeat && !x.b && this.seatActive(i));
       if (next === o.mySeat) this.takeOver();
@@ -2988,11 +3042,25 @@
     coverAway(now) {
       if (brawl() || S.phase !== 'choose' || S.applying) return;
       const p = cur();
-      if (!p || !p.alive || p.bot || p.id === S.online.mySeat || this.seatActive(p.id)) { if (p) this.awaySince[p.id] = 0; return; }
+      if (!p || !p.alive || p.bot || p.id === S.online.mySeat || this.seatActive(p.id)) {
+        if (p) { this.awaySince[p.id] = 0; if (p.id !== S.online.mySeat && this.seatActive(p.id)) this.covered[p.id] = false; }
+        return;
+      }
       if (!this.awaySince[p.id]) { this.awaySince[p.id] = now; return; }
-      if (now - this.awaySince[p.id] < 15000 || S.botBusy) return;
+      if (now - this.awaySince[p.id] < this.awayDelay(p.id) || S.botBusy) return;
       if (!S.awayNoted) { S.awayNoted = true; log(`🤖 ${tag(p)} 자리 비움 → AI 가 대신 둡니다`); toast(`🤖 ${p.emoji} ${p.name} 자리 비움 · AI 가 대신 둬요`, 2500); }
+      this.covered[p.id] = true;
       botTurn(S.botToken = (S.botToken || 0) + 1, true);
+    },
+    covered: {},       // AI 가 대신 둔 적 있는 자리 (돌아올 때까지 다음 차례는 바로 대신)
+    /** 자리 비운 사람 차례를 AI 가 대신 두기까지: 방을 떠났거나 이미 대신 뒀으면 2초, 화면만 숨겼으면 8초 */
+    awayDelay(i) { return !this.peerOfSeat(i) || this.covered[i] ? 2000 : 8000; },
+    /** 화면 표시용: 지금 차례인 사람이 자리를 비웠으면 AI 가 대신 두기까지 남은 초 (없으면 null) */
+    awayLeft(i) {
+      if (!S.online || this.seatActive(i)) { this.awayView = null; return null; }
+      const key = S.round + ':' + S.turn;
+      if (!this.awayView || this.awayView.key !== key) this.awayView = { key, at: Date.now() };
+      return Math.max(0, Math.ceil((this.awayDelay(i) - (Date.now() - this.awayView.at)) / 1000));
     },
 
     myKey() { return this.byId || this.uid; },
@@ -3101,7 +3169,7 @@
       let code = '';
       for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
       if (!(await this.connect(code))) return;
-      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn', hp: S.maxHp, exp: !!($('#optExp') && $('#optExp').checked) };
+      S.online = { code, host: true, seats: [{ k: this.myKey(), n: this.nick }], mySeat: 0, phase: 'lobby', seq: 0, base: null, act: null, timer: $('#optTimer').checked, mode: 'turn', hp: S.maxHp, exp: !!($('#optExp') && $('#optExp').checked), rj: !!($('#optRand') && $('#optRand').checked) };
       this.publish();
       showLobby();
     },
@@ -3111,7 +3179,7 @@
       const seats = (h.seats || []).map(x => ({ k: cleanText(x.k, 60), n: cleanText(x.n, 10) }));
       if (!seats.length) return;
       seats[0].k = this.myKey();
-      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP), exp: !!h.exp };
+      S.online = { code: h.code, host: true, seats, mySeat: 0, phase: h.phase === 'game' ? 'game' : 'lobby', seq: int(h.seq, 0, 1e9), base: null, act: null, timer: !!h.timer, mode: h.mode === 'brawl' ? 'brawl' : 'turn', hp: int(h.hp, 50, 999, DEFAULT_HP), exp: !!h.exp, rj: !!h.rj };
       this.queue = []; this.handled = {};
       if (S.online.phase === 'game') {
         this.enterGame();
@@ -3129,9 +3197,9 @@
       const o = S.online;
       this.room.presence({
         app: APP, room: o.code, role: 'host', uid: this.uid, nick: this.nick,
-        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, ex: o.exp ? 1 : 0, req: null, ep: o.epoch | 0,
+        seats: o.seats, ph: o.phase, seq: o.seq, base: o.base, acts: o.acts || [], act: null, tm: o.timer ? 1 : 0, md: o.mode, mh: o.hp, ex: o.exp ? 1 : 0, rj: o.rj ? 1 : 0, req: null, ep: o.epoch | 0,
       }).catch(() => toast('방 정보를 보내지 못했어요', 2500));
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, rj: o.rj ? 1 : 0, cur: o.phase === 'game' ? snapshot() : null, at: Date.now() });
     },
     startGame() {
       const o = S.online;
@@ -3142,6 +3210,7 @@
       S.gseed = newSeed();
       initObstacles();
       initCoins();
+      assignRandomJobs();
       o.seq = 0; o.act = null; o.base = snapshot(); o.acts = []; o.hist = [];
       this.publish();
       log('🎮 게임 시작! 문제를 맞혀 행동하세요.');
@@ -3233,6 +3302,7 @@
       o.mode = h.md === 'brawl' ? 'brawl' : 'turn';
       o.hp = int(h.mh, 50, 999, DEFAULT_HP);
       o.exp = !!h.ex;
+      o.rj = !!h.rj;
       if (h.ph === 'lobby') {
         if (o.phase === 'game') { toast('방장이 방을 새로 열었어요'); }
         o.phase = 'lobby';
@@ -3337,6 +3407,7 @@
       S.players = o.seats.map((x, i) => makePlayer(i, x.n, o.seats.length, !!x.b));
       S.mode = o.mode === 'brawl' ? 'brawl' : 'turn';
       S.exp = !!o.exp;
+      S.randJobs = !!o.rj;
       S.obst = new Map();
       S.zoneSeq = 0; S.zoneSeq0 = 0;
       S.myBusy = false; S.lockUntil = 0; S.localAim = null;
@@ -3377,6 +3448,7 @@
           const keys = new Set(here.map(p => this.keyOf(p)));
           const kept = o.seats.filter((x, i) => i === 0 || x.b || keys.has(x.k));
           if (kept.length !== o.seats.length) { o.seats = kept; changed = true; }
+          if (this.maybeDemote()) return;
           if (changed) this.publish();
           renderLobby();
         } else {
@@ -3399,7 +3471,7 @@
     },
     publishSaveOnly() {
       const o = S.online;
-      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, cur: snapshot(), at: Date.now() });
+      store.set(HOST_SAVE, { code: o.code, nick: this.nick, seats: o.seats, phase: o.phase, seq: o.seq, timer: o.timer, mode: o.mode, hp: o.hp, exp: o.exp ? 1 : 0, rj: o.rj ? 1 : 0, cur: snapshot(), at: Date.now() });
     },
     leave() {
       if (this.room) {
@@ -3457,7 +3529,8 @@
             <button data-mode="brawl" class="${o.mode === 'brawl' ? 'sel' : ''}"><b>🔥 난전</b><small>턴 없이 동시에, 맞히는 대로 행동</small></button>
           </div>
           <div class="hp-row" id="lobbyHp"></div>
-          <label class="check exp-check"><input type="checkbox" id="lobbyExp" ${o.exp ? 'checked' : ''}> 🧪 실험 모드 <small>돌·상자 장애물 + 자기장 축소</small></label>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b> · 시작 체력 <b>${o.hp}</b>${o.exp ? ' · <b>🧪 실험 모드</b> (장애물 + 자기장)' : ''}</p>`}
+          <label class="check exp-check"><input type="checkbox" id="lobbyRand" ${o.rj ? 'checked' : ''}> 🎲 직업 랜덤 <small>시작할 때 직업을 무작위로 받음 (증강 고르기 없음)</small></label>
+          <label class="check exp-check"><input type="checkbox" id="lobbyExp" ${o.exp ? 'checked' : ''}> 🧪 실험 모드 <small>돌·상자 장애물 + 자기장 축소</small></label>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b> · 시작 체력 <b>${o.hp}</b>${o.rj ? ' · <b>🎲 직업 랜덤</b>' : ''}${o.exp ? ' · <b>🧪 실험 모드</b> (장애물 + 자기장)' : ''}</p>`}
         ${o.phase !== 'joining' && (o.host || o.mySeat >= 0) ? `<div class="copy-row nick-row"><input id="lobbyNick" maxlength="10" value="${esc(Net.nick || '')}" aria-label="내 닉네임"><button id="btnRename">닉네임 변경</button></div>` : ''}
         <ul class="seats">${seats}</ul>
         <p class="lobby-msg">${message ? esc(message)
@@ -3501,6 +3574,8 @@
       $('#btnRename').onclick = () => Net.rename(ln.value);
       ln.addEventListener('keydown', e => { if (e.key === 'Enter') Net.rename(ln.value); });
     }
+    const lr = $('#lobbyRand');
+    if (lr) lr.onchange = () => { o.rj = lr.checked; Net.publish(); renderLobby(); };
     const lx = $('#lobbyExp');
     if (lx) lx.onchange = () => { o.exp = lx.checked; store.set('pdeb-exp', o.exp ? 1 : 0); Net.publish(); renderLobby(); };
     const lh = $('#lobbyHp');
@@ -3588,14 +3663,15 @@
   if (/[?&]sim\b/.test(location.search)) {
     window.__sim = {
       styles: Object.keys(STYLES),
-      start(styles, hp = DEFAULT_HP, exp = false) {
+      start(styles, hp = DEFAULT_HP, exp = false, rand = false) {
         if ($('#optExp')) $('#optExp').checked = !!exp;
+        if ($('#optRand')) $('#optRand').checked = !!rand;
         S.localCount = styles.length;
         S.localBots = new Set(styles.map((_, i) => i));
         S.maxHp = hp;
         $('#optTimer').checked = false;
         startGame();
-        S.players.forEach((p, i) => { p.style = styles[i]; });
+        if (!rand) S.players.forEach((p, i) => { p.style = styles[i]; });
       },
       /** 테스트용: i 번 말을 (x, y) 에 두고 ang 방향으로, 지금 공격하면 누가 몇 번 맞는지 */
       place(i, x, y, ang) { const p = S.players[i]; p.x = x; p.y = y; if (ang != null) { p.ang = ang; p.aimBase = ang; } renderAll(); },
