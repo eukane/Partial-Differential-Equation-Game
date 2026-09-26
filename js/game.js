@@ -2632,6 +2632,8 @@
   // ------------------------------------------------------------------
   // 공개된 게임 페이지 주소. 초대 링크 = 이 주소 + '#방코드'
   const INVITE_BASE = 'https://claude.ai/artifact/2E2sjbN9FEvtqU8FMwpNie';
+  const NICKS = ['수포자', '야매기사', '킹받는폰', '미적분러', '인수분해', '삼각함수', '로그짱', '벡터맨', '확통러', '적분왕'];
+  const autoNick = () => NICKS[Math.floor(Math.random() * NICKS.length)] + (10 + Math.floor(Math.random() * 90));
   const APP = 'pdeb3';
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const HOST_SAVE = 'pdeb3-host';
@@ -2866,7 +2868,20 @@
         b.textContent = `↩ 진행 중이던 방 ${h.code} 다시 열기`;
         b.onclick = () => this.restore(h);
       }
-      if (hash) $('#nick').focus();
+      // 초대 링크(#방코드)로 열었으면 바로 방에 들어간다 (닉네임이 없으면 자동으로 지어 주고, 로비에서 바꿀 수 있다)
+      if (/^[A-Z0-9]{4}$/.test(hash) && !(h && h.code === hash)) {
+        if (!cleanText($('#nick').value, 10)) $('#nick').value = autoNick();
+        setTimeout(() => this.join(), 50);
+      } else if (hash) $('#nick').focus();
+      // 이미 열어 둔 페이지에서 초대 링크를 또 열면(주소의 #만 바뀜) 그 방으로
+      window.addEventListener('hashchange', () => {
+        const c = (location.hash || '').replace('#', '').toUpperCase();
+        if (!/^[A-Z0-9]{4}$/.test(c) || (S.online && S.online.code === c) || (S.online && S.online.phase === 'game')) return;
+        if (S.online) this.leave();
+        $('#joinCode').value = c;
+        if (!cleanText($('#nick').value, 10)) $('#nick').value = autoNick();
+        setTimeout(() => this.join(), 50);
+      });
       // 1.5초마다: 심장박동 보내기, 방장 이어받기, 자리 비운 사람 차례 대신 두기
       setInterval(() => this.tick(), 1500);
       document.addEventListener('visibilitychange', () => {
@@ -3051,6 +3066,19 @@
       if (a == null || !p || Math.abs(p.ang - a) < 0.05) return;
       p.ang = Math.round(a * 10) / 10;
       renderPieces(); renderGuide(); updateCamera(); renderTurn();
+    },
+    /** 로비에서 닉네임 바꾸기 */
+    rename(n) {
+      n = cleanText(n, 10);
+      const o = S.online;
+      if (!n || !o || n === this.nick) return;
+      this.nick = n;
+      store.set('pdeb-nick', n);
+      $('#nick').value = n;
+      if (o.host) { if (o.seats[0]) o.seats[0].n = n; this.publish(); }
+      else this.room.presence({ nick: n }).catch(() => {});
+      renderLobby();
+      toast(`닉네임: ${n}`);
     },
     readNick() {
       const n = cleanText($('#nick').value, 10);
@@ -3423,6 +3451,7 @@
           </div>
           <div class="hp-row" id="lobbyHp"></div>
           <label class="check exp-check"><input type="checkbox" id="lobbyExp" ${o.exp ? 'checked' : ''}> 🧪 실험 모드 <small>돌·상자 장애물 + 자기장 축소</small></label>` : `<p class="lobby-mode">모드: <b>${o.mode === 'brawl' ? '🔥 난전 (턴 없이 동시에)' : '🎲 턴제 (차례대로)'}</b> · 시작 체력 <b>${o.hp}</b>${o.exp ? ' · <b>🧪 실험 모드</b> (장애물 + 자기장)' : ''}</p>`}
+        ${o.phase !== 'joining' && (o.host || o.mySeat >= 0) ? `<div class="copy-row nick-row"><input id="lobbyNick" maxlength="10" value="${esc(Net.nick || '')}" aria-label="내 닉네임"><button id="btnRename">닉네임 변경</button></div>` : ''}
         <ul class="seats">${seats}</ul>
         <p class="lobby-msg">${message ? esc(message)
           : waitingHost ? '방을 찾는 중…'
@@ -3460,6 +3489,11 @@
     el.lobby.querySelectorAll('[data-mode]').forEach(b => {
       b.onclick = () => { o.mode = b.dataset.mode; Net.publish(); renderLobby(); };
     });
+    const ln = $('#lobbyNick');
+    if (ln) {
+      $('#btnRename').onclick = () => Net.rename(ln.value);
+      ln.addEventListener('keydown', e => { if (e.key === 'Enter') Net.rename(ln.value); });
+    }
     const lx = $('#lobbyExp');
     if (lx) lx.onchange = () => { o.exp = lx.checked; store.set('pdeb-exp', o.exp ? 1 : 0); Net.publish(); renderLobby(); };
     const lh = $('#lobbyHp');

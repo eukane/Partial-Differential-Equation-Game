@@ -640,3 +640,4 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 .fx .imp-poison .imp-in { animation: impSmoke .7s ease-out forwards; }
 .fx .guide-cell.lock { stroke-dasharray: .1 .08; stroke-width: .05; fill: rgba(255, 203, 61, .12); }
 .stand .guide-label { position: absolute; top: 0; left: 50%; transform: translate(-50%, -85%); font-weight: 800; font-size: calc(var(--cell) * .3); color: #ff5d6c; text-shadow: 0 0 3px #0b1020, 0 0 3px #0b1020, 0 1px 2px #0b1020; white-space: nowrap; pointer-events: none; }
+.nick-row { margin: 6px 0 2px; }
