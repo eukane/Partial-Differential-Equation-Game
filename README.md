@@ -1,4 +1,4 @@
-# ♟ 저급체스
+# ♟ 야매체스
 
 (예전 이름: ∂ 미분 배틀 · 저장소 이름 Partial-Differential-Equation-Game)
 
