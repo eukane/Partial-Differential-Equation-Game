@@ -145,6 +145,14 @@
     shockwave: p => { boom('game', 0, 0.55, 0.45); noise('game', { f: 200, f2: 1600, dur: 0.45, vol: 0.3, q: 2 }); tone('game', { f: 120 * p, f2: 60, dur: 0.4, type: 'sawtooth', vol: 0.1 }); },
     homing: p => [0, 0.18].forEach(at => { tone('game', { f: 500 * p, f2: 1900 * p, dur: 0.35, vol: 0.12, at, vib: 25 }); noise('game', { filter: 'highpass', f: 3000, dur: 0.2, vol: 0.12, at }); }),
     whirl: () => { noise('game', { f: 300, f2: 2600, dur: 0.35, vol: 0.35, q: 3 }); noise('game', { f: 2600, f2: 300, dur: 0.35, vol: 0.3, q: 3, at: 0.3 }); },
+    // 🗡️ 암살: 쉭(사라짐) → 스릉(칼)
+    assassin: p => { noise('game', { f: 3500, f2: 800, dur: 0.18, vol: 0.3, q: 3 }); [0, 0.01].forEach((at, i) => tone('game', { f: (3200 + i * 900) * p, f2: 2600, dur: 0.35, type: 'triangle', vol: 0.07, at: 0.2 + at })); noise('game', { filter: 'highpass', f: 5000, dur: 0.12, vol: 0.2, at: 0.2 }); },
+    // ☠️ 독: 휙(던짐) + 뽀글
+    poison: p => { noise('game', { f: 600, f2: 1800, dur: 0.2, vol: 0.2, q: 3 }); for (let i = 0; i < 4; i++) tone('game', { f: (300 + i * 120) * p, f2: (600 + i * 150) * p, dur: 0.07, vol: 0.13, at: 0.12 + i * 0.06 }); },
+    // 🏹 궁수: 팅(시위) + 슈욱
+    archer: p => { tone('game', { f: 180 * p, f2: 120, dur: 0.22, type: 'triangle', vol: 0.3, vib: 30 }); noise('game', { f: 2800, f2: 5000, dur: 0.22, vol: 0.2, q: 5, at: 0.03 }); },
+    // 🧨 폭탄: 치지직(도화선) + 데굴데굴
+    bomber: p => { noise('game', { filter: 'highpass', f: 4000, dur: 0.45, vol: 0.16 }); for (let i = 0; i < 5; i++) tone('game', { f: 140 * p, f2: 90, dur: 0.06, type: 'triangle', vol: 0.18, at: 0.1 + i * 0.09 }); },
   };
 
   /** 무기별 타격음 (game.js 의 맞는 이펙트 이름과 같다) */
@@ -161,6 +169,9 @@
     quake: () => { boom('game', 0, 0.55, 0.4); tone('game', { f: 60, f2: 35, dur: 0.35, vol: 0.4 }); },                                                                                       // 쿠웅
     wind: () => { noise('game', { f: 700, f2: 2600, dur: 0.26, vol: 0.32, q: 2 }); impact(0.06, 0.25); },                                                                                     // 휘익 퍽
     wave: () => { noise('game', { filter: 'lowpass', f: 1600, f2: 200, dur: 0.32, vol: 0.45 }); impact(0, 0.3); },                                                                             // 쿠왕
+    stab: () => { noise('game', { f: 5000, f2: 2000, dur: 0.08, vol: 0.4, q: 4 }); impact(0.02, 0.4); tone('game', { f: 2800, dur: 0.12, type: 'triangle', vol: 0.06 }); },                          // 푹
+    poison: () => { noise('game', { filter: 'lowpass', f: 700, f2: 300, dur: 0.2, vol: 0.3 }); for (let i = 0; i < 5; i++) tone('game', { f: 350 + Math.random() * 400, f2: 900, dur: 0.06, vol: 0.1, at: 0.05 + i * 0.05 }); }, // 치익 뽀글
+    pierce: () => { impact(0, 0.35); tone('game', { f: 240, f2: 180, dur: 0.18, type: 'triangle', vol: 0.2, vib: 40 }); },                                                                     // 퉁(꽂힘)
   };
 
   /** 직업 캐릭터별 피격 목소리 (p: 같은 직업이어도 자리마다 살짝 다른 높이) */
@@ -184,6 +195,10 @@
     grapple: p => vox({ f: 155 * p, fm: 175 * p, f2: 110 * p, dur: 0.34, form: 640, vib: 24, vibDepth: 0.08 }),                          // 해적 "아르르!"
     shockwave: p => vox({ f: 240 * p, f2: 175 * p, dur: 0.15, form: 900, vol: 0.34 }),                                                   // 격투가 "흡!"
     homing: p => { vox({ f: 370 * p, f2: 250 * p, dur: 0.26, form: 1100, vib: 8 }); tone('game', { f: 2600, f2: 3400, dur: 0.15, vol: 0.05, at: 0.12 }); }, // 마법사 "으앗" + 반짝
+    assassin: p => vox({ f: 260 * p, f2: 190 * p, dur: 0.12, form: 1500, vol: 0.2 }),                                                    // 닌자 짧게 "읏"
+    poison: p => { vox({ f: 150 * p, fm: 180 * p, f2: 120 * p, dur: 0.3, form: 420, form2: 900, vol: 0.34 }); },                      // 역병 의사 가면 속 "우웁"
+    archer: p => vox({ f: 520 * p, f2: 400 * p, dur: 0.2, form: 1600, form2: 2900 }),                                                   // 엘프 "앗!"
+    bomber: p => { vox({ f: 170 * p, f2: 110 * p, dur: 0.26, form: 700, type: 'square', vol: 0.2 }); noise('game', { filter: 'lowpass', f: 600, dur: 0.12, vol: 0.15, at: 0.24 }); [0.3, 0.42].forEach(at => noise('game', { f: 900, dur: 0.06, vol: 0.12, at })); }, // 폭파 전문가 "크억, 콜록콜록"
   };
 
   /** 캐릭터별 피격 목소리 (직업을 고르기 전 동물일 때) */
@@ -212,6 +227,7 @@
     box_tele: () => { tone('game', { f: 220, f2: 2200, dur: 0.28, vol: 0.18, vib: 20 }); tone('game', { f: 2200, f2: 220, dur: 0.28, vol: 0.16, at: 0.28, vib: 20 }); },
     box_swap: () => { noise('game', { f: 300, f2: 2400, dur: 0.22, vol: 0.28, q: 3 }); noise('game', { f: 2400, f2: 300, dur: 0.22, vol: 0.28, q: 3, at: 0.2 }); },
     box_again: () => [1320, 1760].forEach((f, i) => tone('game', { f, dur: 0.25, type: 'triangle', vol: 0.18, at: i * 0.12 })),
+    blink: () => { noise('game', { f: 2500, f2: 600, dur: 0.2, vol: 0.3, q: 2 }); tone('game', { f: 1800, f2: 3600, dur: 0.12, vol: 0.06, at: 0.05 }); },
     crate: () => { noise('game', { filter: 'lowpass', f: 900, f2: 300, dur: 0.14, vol: 0.4 }); tone('game', { f: 210, f2: 120, dur: 0.12, type: 'triangle', vol: 0.25 }); noise('game', { f: 2500, dur: 0.05, vol: 0.2, q: 4, at: 0.03 }); },
     box_bomb: () => { tone('game', { f: 900, dur: 0.05, type: 'square', vol: 0.08 }); boom('game', 0.1, 0.85, 0.8); },
   };

@@ -106,7 +106,8 @@
   .k-king.st-attack .sceptre { animation: ch-slam .9s ease-in; transform-origin: 50% 100%; }
   @keyframes ch-slam { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-60deg) translateY(-6px); } 50%, 70% { transform: rotate(35deg); } }
   .k-king.st-attack .rig { animation: ch-stomp .9s ease-in; }
-  @keyframes ch-stomp { 0%, 100% { transform: scale(1, 1); } 35% { transform: translateY(-8px) scale(.97, 1.04); } 50% { transform: translateY(0) scale(1.08, .9); } 70% { transform: scale(1, 1); } }
+  @keyframes ch-stomp { 0%, 100% { transform: translateX(0) scale(1, 1); } 25% { transform: translateX(22px) rotate(6deg); } 40% { transform: translate(22px, -10px) scale(.97, 1.04); }
+    55% { transform: translate(22px, 0) scale(1.1, .88); } 75% { transform: translateX(16px) scale(1, 1); } }
   .k-king.st-attack .flash { animation: ch-ring .6s ease-out .42s; transform-origin: 50% 50%; }
   @keyframes ch-ring { 0% { opacity: 1; transform: scale(.3); } 100% { opacity: 0; transform: scale(1.3); } }
   .k-king.st-win .sceptre { animation: ch-raise 1.1s ease-in-out; transform-origin: 50% 100%; }
@@ -239,6 +240,52 @@
   @keyframes ch-vlunge { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px) scale(.96); } 45% { transform: translateX(22px) rotate(8deg); } 70% { transform: translateX(4px); } }
   @keyframes ch-spread { 0%, 100% { transform: scaleX(1); } 45% { transform: scaleX(1.6) scaleY(1.08); } }
   .k-vampire.st-win .cape { animation: ch-spread 1.1s ease-in-out; transform-origin: 50% 0%; }
+
+  /* 🗡️ 암살 */
+  .k-assassin.st-idle .tail { animation: ch-flap 1.2s ease-in-out infinite; transform-origin: 100% 0%; }
+  .k-assassin.st-idle .blade { animation: ch-sway 2.2s ease-in-out infinite; transform-origin: 0% 50%; }
+  .k-assassin.st-attack .rig { animation: ch-vanish 1s ease-in-out; }
+  @keyframes ch-vanish { 0%, 100% { opacity: 1; transform: translateX(0); } 15% { opacity: 1; transform: translateX(-4px) scale(.95); } 25%, 38% { opacity: 0; transform: translateX(0) scale(.6); }
+    48% { opacity: 1; transform: translateX(22px) scale(1.05); } 70% { opacity: 1; transform: translateX(18px); } }
+  .k-assassin.st-attack .smoke { animation: ch-puff .6s ease-out; transform-origin: 50% 50%; }
+  .k-assassin.st-attack .slash { animation: ch-flash .4s ease-out .48s; transform-origin: 0% 50%; }
+  .k-assassin.st-win .blade { animation: ch-raise 1.1s ease-in-out; transform-origin: 0% 50%; }
+
+  /* ☠️ 독 */
+  .k-poison.st-idle .bubbles { animation: ch-blink 1s ease-in-out infinite; }
+  .k-poison.st-idle .flask { animation: ch-sway 2.4s ease-in-out infinite; transform-origin: 50% 100%; }
+  .k-poison.st-attack .flask { animation: ch-lobArm 1.1s ease-in-out; transform-origin: 30% 100%; }
+  @keyframes ch-lobArm { 0%, 100% { transform: rotate(0); opacity: 1; } 20% { transform: rotate(-50deg); } 32% { transform: rotate(30deg); opacity: 1; } 34%, 88% { opacity: 0; } }
+  .k-poison.st-attack .proj { animation: ch-potion 1.1s ease-out; }
+  @keyframes ch-potion { 0%, 30% { opacity: 0; transform: translate(0, 0) rotate(0); } 32% { opacity: 1; } 70% { opacity: 1; transform: translate(40px, -40px) rotate(300deg); }
+    82% { opacity: 1; transform: translate(62px, 0) rotate(420deg); } 84%, 100% { opacity: 0; transform: translate(62px, 0); } }
+  .k-poison.st-attack .splash { animation: ch-puff .5s ease-out .84s; transform-origin: 50% 50%; }
+  .k-poison.st-win .flask { animation: ch-raise 1.1s ease-in-out; transform-origin: 30% 100%; }
+
+  /* 🏹 궁수 */
+  .k-archer.st-idle .ears { animation: ch-earTwitch 3s ease-in-out infinite; }
+  @keyframes ch-earTwitch { 0%, 85%, 100% { transform: rotate(0); } 90% { transform: rotate(-6deg); } 95% { transform: rotate(3deg); } }
+  .k-archer.st-attack .nock { animation: ch-draw .9s ease-in-out; }
+  @keyframes ch-draw { 0%, 100% { transform: translateX(0); opacity: 1; } 35%, 45% { transform: translateX(-9px); opacity: 1; } 47%, 90% { opacity: 0; } }
+  .k-archer.st-attack .bow { animation: ch-bowFlex .9s ease-in-out; transform-origin: 0% 50%; }
+  @keyframes ch-bowFlex { 0%, 100% { transform: scaleX(1); } 35%, 45% { transform: scaleX(1.25); } 50% { transform: scaleX(.9); } 60% { transform: scaleX(1); } }
+  .k-archer.st-attack .proj { animation: ch-arrowFly .9s linear; }
+  @keyframes ch-arrowFly { 0%, 46% { opacity: 0; transform: translateX(0); } 47% { opacity: 1; } 80% { opacity: 1; transform: translateX(70px); } 82%, 100% { opacity: 0; transform: translateX(76px); } }
+  .k-archer.st-attack .twang { animation: ch-flash .3s ease-out .42s; transform-origin: 50% 50%; }
+  .k-archer.st-win .bow { animation: ch-raise 1.1s ease-in-out; transform-origin: 50% 50%; }
+
+  /* 🧨 폭탄 */
+  .k-bomber.st-idle .spark, .k-bomber.st-attack .spark { animation: ch-blink .25s steps(2) infinite; }
+  .k-bomber.st-idle .held { animation: ch-toss 1.6s ease-in-out infinite; }
+  @keyframes ch-toss { 0%, 60%, 100% { transform: translateY(0); } 75% { transform: translateY(-10px) rotate(-20deg); } }
+  .k-bomber.st-attack .arm-throw { animation: ch-throw 1.2s ease-in-out; transform-origin: 15% 15%; }
+  .k-bomber.st-attack .held { animation: ch-hideHeld 1.2s linear; }
+  .k-bomber.st-attack .proj { animation: ch-bombArc 1.2s ease-in-out; }
+  @keyframes ch-bombArc { 0%, 20% { opacity: 0; transform: translate(0, 0) rotate(0); } 21% { opacity: 1; } 45% { transform: translate(30px, -34px) rotate(200deg); }
+    68% { opacity: 1; transform: translate(58px, 6px) rotate(400deg); } 70%, 100% { opacity: 0; transform: translate(58px, 6px); } }
+  .k-bomber.st-attack .boom { animation: ch-puff .6s ease-out .68s; transform-origin: 50% 50%; }
+  .k-bomber.st-hit .soot, .k-bomber.st-ko .soot { opacity: 1; }
+  .k-bomber.st-win .arm-throw { animation: ch-raiseB 1.1s ease-in-out; transform-origin: 15% 15%; }
 
   @media (prefers-reduced-motion: reduce) { .ch.st-idle .rig, .ch.st-idle .shadow, .ch.st-idle g { animation: none !important; } }
   `;
@@ -675,6 +722,108 @@
       <g transform="translate(82 58)"><g class="proj o1"><circle r="5" fill="#b8f0ff" stroke="#fff" stroke-width="2"/></g></g>
       <g transform="translate(82 58)"><g class="proj o2"><circle r="4.5" fill="#b8f0ff" stroke="#fff" stroke-width="2"/></g></g>`),
 
+    // 🗡️ 암살: 두건 + 플레이어 색 복면·목도리 + 단검
+    assassin: () => wrap('assassin', `
+      <g class="tail"><path class="o pc" d="M42 82 Q26 78 13 88 Q24 88 29 93 Q20 98 16 107 Q31 99 44 90 Z"/></g>
+      ${legs('#23263a')}
+      ${torso('#2b2f45')}
+      <path d="M44 100 L76 100" stroke="#151827" stroke-width="4"/>
+      <path d="M44 100 L76 100" stroke="#4a5070" stroke-width="2"/>
+      ${hand(42, 104, SKIN.b)}
+      ${head(SKIN.b)}
+      <path ${OUT} d="M31 64 Q30 28 60 28 Q90 28 89 64 L83 66 Q83 49 60 48 Q37 49 37 66 Z" fill="#2b2f45"/>
+      <path class="o pc" d="M35 65 Q60 60 85 65 Q85 85 60 87 Q35 85 35 65 Z"/>
+      <path d="M40 72 Q60 68 80 72" stroke="#151827" stroke-width="1.5" opacity=".35" fill="none"/>
+      ${faces('#151827', `<path d="M44 53 L55 56 M76 53 L65 56" stroke="#151827" stroke-width="2.8" stroke-linecap="round"/>`)}
+      <g class="blade">
+        <rect ${OUT} x="70" y="98" width="10" height="6" rx="2" fill="#151827"/>
+        <rect ${OUT} x="79" y="95" width="3.5" height="12" rx="1.5" fill="#8a8f9e"/>
+        <path ${OUT} d="M82.5 98 L104 101 L82.5 104 Z" fill="#e6ebf5"/>
+        ${hand(75, 101, SKIN.b)}
+      </g>
+      <g class="flash smoke"><circle cx="60" cy="96" r="22" fill="#9aa0ad" opacity=".85"/><circle cx="42" cy="84" r="14" fill="#b8bdc8" opacity=".85"/><circle cx="78" cy="82" r="15" fill="#b8bdc8" opacity=".85"/><circle cx="60" cy="68" r="16" fill="#c9cdd6" opacity=".8"/></g>
+      <g class="flash slash"><path d="M86 66 Q116 88 94 118" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M92 72 Q114 90 98 112" fill="none" stroke="#ff5d6c" stroke-width="2.5" stroke-linecap="round"/></g>`),
+
+    // ☠️ 독: 역병 의사 — 플레이어 색 두건 + 부리 가면 + 초록 독병
+    poison: () => {
+      const flask = cls => `<g class="${cls}"><path ${OUT} d="M77 84 L85 84 L85 90 Q93 94 92 103 Q91 112 81 112 Q71 112 70 103 Q69 94 77 90 Z" fill="#e8f7ff"/>
+        <path d="M72 100 Q81 97 90 100 Q90 110 81 110 Q72 110 72 100 Z" fill="#7dff6a"/><rect ${OUT} x="76" y="80" width="10" height="5" rx="1.5" fill="#8a5a2b"/></g>`;
+      return wrap('poison', `
+      ${robe('#34423a')}
+      <path d="M60 82 L60 126" stroke="#26302a" stroke-width="2.5"/>
+      <g fill="#26302a"><circle cx="56" cy="92" r="1.8"/><circle cx="56" cy="104" r="1.8"/><circle cx="56" cy="116" r="1.8"/></g>
+      ${hand(40, 104, '#3a2f2a')}
+      <path class="o pc" d="M29 68 Q27 25 60 25 Q93 25 91 68 L85 72 Q85 44 60 42 Q35 44 35 72 Z"/>
+      ${head('#efe6d2')}
+      <path ${OUT} d="M63 64 Q92 60 108 80 Q88 82 64 77 Z" fill="#e6dcc4"/>
+      <path d="M70 70 Q88 70 100 77" stroke="#b9ad92" stroke-width="2" fill="none"/>
+      <circle ${OUT} cx="50" cy="58" r="8" fill="#cfe8d8"/><circle ${OUT} cx="70" cy="58" r="8" fill="#cfe8d8"/>
+      ${faces('#1f5a2a', `<circle cx="47" cy="55" r="2" fill="#fff" opacity=".7"/><circle cx="67" cy="55" r="2" fill="#fff" opacity=".7"/>`)}
+      <g class="bubbles"><circle cx="86" cy="76" r="2.4" fill="none" stroke="#9dff8a" stroke-width="1.6"/><circle cx="90" cy="70" r="1.6" fill="none" stroke="#9dff8a" stroke-width="1.4"/></g>
+      ${flask('flask')}
+      ${hand(79, 104, '#3a2f2a')}
+      <g transform="translate(0 0)"><g class="proj">${flask('')}</g></g>
+      <g class="flash splash"><circle cx="146" cy="96" r="12" fill="#7dff6a" opacity=".6"/><circle cx="138" cy="88" r="4" fill="#b8ff9e"/><circle cx="154" cy="86" r="3.5" fill="#b8ff9e"/><circle cx="150" cy="104" r="3" fill="#b8ff9e"/></g>`);
+    },
+
+    // 🏹 궁수: 엘프 — 긴 금발 + 뾰족 귀 + 플레이어 색 두건 + 활·화살통
+    archer: () => wrap('archer', `
+      <path ${OUT} d="M31 58 Q29 30 60 30 Q91 30 89 58 L92 90 Q82 93 78 82 L42 82 Q38 93 28 90 Z" fill="#f3d27a"/>
+      <path ${OUT} d="M26 72 L38 66 L47 102 L35 106 Z" fill="#8a5a2b"/>
+      <path d="M29 70 L25 60 M33 68 L31 57 M37 66 L37 56" stroke="#151827" stroke-width="2.5" stroke-linecap="round"/>
+      <g class="pc"><path class="thin pc" d="M22 58 L25 60 L28 56 Z M28 56 L31 57 L33 53 Z M34 54 L37 56 L39 52 Z"/></g>
+      ${legs('#5a4030')}
+      ${torso('#3f7a4a')}
+      <rect ${OUT} x="40" y="100" width="40" height="6" rx="3" fill="#8a5a2b"/>
+      <path class="o pc" d="M38 78 Q60 90 82 78 L84 87 Q60 99 36 87 Z"/>
+      <g class="ears"><path ${OUT} d="M34 58 L17 47 L35 67 Z M86 58 L103 47 L85 67 Z" fill="#ffe0c7"/></g>
+      ${head('#ffe0c7')}
+      <path ${OUT} d="M33 56 Q34 31 60 31 Q86 31 87 56 Q78 42 64 42 Q60 50 50 46 Q40 46 33 56 Z" fill="#f3d27a"/>
+      <path class="o pc" d="M31 50 Q30 22 60 20 Q90 22 89 50 Q84 34 60 32 Q36 34 31 50 Z"/>
+      ${blush}
+      ${faces('#2c6b3a', smile)}
+      <g class="bow">
+        <path d="M88 70 Q106 98 88 126" fill="none" stroke="#151827" stroke-width="7" stroke-linecap="round"/>
+        <path d="M88 70 Q106 98 88 126" fill="none" stroke="#b07a3e" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M88 70 L88 126" stroke="#e8e2d0" stroke-width="1.3"/>
+        ${hand(93, 98, '#ffe0c7')}
+      </g>
+      <g class="nock"><path d="M64 98 L100 98" stroke="#151827" stroke-width="4" stroke-linecap="round"/><path d="M64 98 L100 98" stroke="#c9a26a" stroke-width="2"/>
+        <path ${OUT} d="M104 98 L98 94.5 L99.5 98 L98 101.5 Z" fill="#dfe4ee" stroke-width="1.5"/>${hand(68, 99, '#ffe0c7')}</g>
+      <g transform="translate(64 98)"><g class="proj"><path d="M0 0 L36 0" stroke="#151827" stroke-width="4" stroke-linecap="round"/><path d="M0 0 L36 0" stroke="#c9a26a" stroke-width="2"/>
+        <path d="M40 0 L34 -3.5 L35.5 0 L34 3.5 Z" fill="#dfe4ee" stroke="#151827" stroke-width="1.2"/></g></g>
+      <g class="flash twang"><path d="M84 86 L78 82 M84 110 L78 114 M80 98 L72 98" stroke="#fff4b0" stroke-width="2.4" stroke-linecap="round"/></g>`),
+
+    // 🧨 폭탄: 폭파 전문가 — 빨간 모히칸 + 큰 고글 + 플레이어 색 목수건 + 작업복 + 폭탄
+    bomber: () => {
+      const bomb = cls => `<g class="${cls}"><circle ${OUT} cx="0" cy="0" r="10" fill="#2a2d3a"/><circle cx="-3.5" cy="-3.5" r="2.6" fill="#fff" opacity=".45"/>
+        <path d="M5 -8 Q9 -14 13 -16" stroke="#c9a26a" stroke-width="2.4" fill="none" stroke-linecap="round"/><g class="spark"><circle cx="14" cy="-17" r="3.2" fill="#ffe14d"/><circle cx="14" cy="-17" r="1.5" fill="#fff"/></g></g>`;
+      return wrap('bomber', `
+      ${legs('#4a4f63')}
+      ${torso('#5d6b8a')}
+      <path d="M41 97 L79 97 L79 103 L41 103 Z" fill="#ffcb3d"/>
+      <path d="M46 97 L42 103 M54 97 L50 103 M62 97 L58 103 M70 97 L66 103 M78 97 L74 103" stroke="#151827" stroke-width="2.4"/>
+      <rect x="40" y="80" width="40" height="36" rx="14" fill="none" class="o"/>
+      ${hand(42, 104, SKIN.c)}
+      ${head(SKIN.c)}
+      <path ${OUT} d="M51 36 L54 17 L59 29 L62 14 L66 29 L70 18 L70 37 Q60 32 51 36 Z" fill="#e0452b"/>
+      <path class="o pc" d="M39 79 Q60 90 81 79 L81 87 Q60 98 39 87 Z"/>
+      <path class="o pc" d="M40 84 L30 92 L38 94 Z"/>
+      <g class="soot" opacity=".55"><ellipse cx="43" cy="70" rx="5" ry="2.5" fill="#3a3a3a"/><ellipse cx="77" cy="72" rx="4" ry="2" fill="#3a3a3a"/></g>
+      ${faces('#151827', grin)}
+      <path d="M33 47 Q60 40 87 47" stroke="#151827" stroke-width="4" fill="none"/>
+      <circle ${OUT} cx="49" cy="45" r="7.5" fill="#ffb84d"/><circle ${OUT} cx="71" cy="45" r="7.5" fill="#ffb84d"/>
+      <circle cx="46.5" cy="42.5" r="2.2" fill="#fff" opacity=".8"/><circle cx="68.5" cy="42.5" r="2.2" fill="#fff" opacity=".8"/>
+      <g class="arm-throw">
+        <rect ${OUT} x="74" y="84" width="10" height="20" rx="5" fill="#5d6b8a"/>
+        <g transform="translate(84 100)">${bomb('held')}</g>
+        ${hand(80, 104, SKIN.c)}
+      </g>
+      <g transform="translate(86 96)">${bomb('proj')}</g>
+      <g class="flash boom"><circle cx="146" cy="100" r="18" fill="#ff9f43" opacity=".8"/><circle cx="146" cy="100" r="9" fill="#ffe07a"/>
+        <path d="M146 76 L146 70 M168 100 L174 100 M124 100 L118 100 M162 84 L166 80 M130 84 L126 80" stroke="#ffb35c" stroke-width="3" stroke-linecap="round"/></g>`);
+    },
+
     // 🧛 흡혈: 높은 깃 망토 (안감이 플레이어 색) + 빨간 눈 + 송곳니
     vampire: () => wrap('vampire', `
       <g class="cape">
@@ -701,7 +850,7 @@
     bishop: ['주교관 · 사제복 · 금빛 지팡이', '공격: 지팡이를 휘두르면 ✕ 모양 빛'],
     rook: ['성벽 투구 · 갑옷 · ＋ 방패', '공격: 방패 들고 돌진 + ＋ 모양 빛'],
     knight: ['깃털 투구 · 기사 · 검', '공격: 위로 뛰었다 옆으로 내려찍기 (L자)'],
-    king: ['왕관 · 망토 · 콧수염 · 홀', '공격: 홀로 바닥을 쾅 → 둥근 충격'],
+    king: ['왕관 · 망토 · 콧수염 · 홀', '공격: 앞으로 돌진해 홀로 바닥을 쾅 → 둥근 충격'],
     mortar: ['철모 · 고글 · 군복 · 박격포', '공격: 포탄이 하늘로 쏘아 올라감 + 연기'],
     scatter: ['페도라 · 선글라스 · 정장 · 기관단총', '공격: 두두두 연사 + 여기저기 섬광'],
     queen: ['티아라 · 긴 머리 · 드레스 · 별 지팡이', '공격: 지팡이를 들면 8방향 별빛'],
@@ -714,6 +863,10 @@
     shockwave: ['격투가 · 머리띠 · 권투 장갑', '공격: 정권 지르기 → 앞으로 퍼지는 파동'],
     homing: ['고깔모자 · 동그란 안경 · 별 로브', '공격: 구슬 두 개가 휘어져 날아감'],
     vampire: ['높은 깃 망토 · 빨간 눈 · 송곳니', '공격: 달려들며 망토를 활짝'],
+    assassin: ['닌자 · 복면 · 목도리 · 단검', '공격: 연기와 함께 사라졌다가 튀어나와 베기'],
+    poison: ['역병 의사 · 부리 가면 · 독병', '공격: 독병을 던지면 초록 독이 퍼짐'],
+    archer: ['엘프 · 금발 · 뾰족 귀 · 활', '공격: 시위를 당겼다 놓으면 화살이 쭉'],
+    bomber: ['폭파 전문가 · 모히칸 · 고글 · 폭탄', '공격: 폭탄을 던지면 콰광'],
   };
 
   const STATES = ['idle', 'attack', 'hit', 'ko', 'win'];

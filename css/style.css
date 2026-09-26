@@ -631,3 +631,10 @@ button.big { font-size: 1.15rem; padding: 12px 22px; }
 @keyframes zonePulse { 50% { opacity: .45; } }
 .fx .guide-cell.crate-hit { stroke-dasharray: none; stroke-width: .06; fill: rgba(255, 210, 120, .18); }
 .exp-check small { color: var(--muted); margin-left: 4px; }
+.piece.poisoned .avatar.char { filter: drop-shadow(0 0 3px #7dff6a) drop-shadow(0 3px 3px rgba(0, 0, 0, .35)); }
+.piece.poisoned .avatar:not(.char) { box-shadow: 0 0 0 3px #7dff6a, 0 4px 10px rgba(0, 0, 0, .45); }
+.fx .guide-cell.blink { stroke-dasharray: none; stroke-width: .07; fill: rgba(255, 255, 255, .12); }
+.fx .shot.t-drip { stroke-width: .06; stroke-dasharray: .03 .14; }
+.fx .imp-smoke .imp-in { animation: impSmoke .6s ease-out forwards; }
+@keyframes impSmoke { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.5); opacity: 0; } }
+.fx .imp-poison .imp-in { animation: impSmoke .7s ease-out forwards; }
