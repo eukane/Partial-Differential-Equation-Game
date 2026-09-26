@@ -775,6 +775,7 @@
     grapple:   { head: 'hook', trail: 'rope', speed: 14, hit: 'thud' },
     homing:    { head: 'orb', trail: 'glow', tint: '#9ef0ff', speed: 9, hit: 'magic' },
     knight:    { head: 'dot', trail: 'dash', speed: 14, hit: 'quake' },
+    king:      { head: 'crown', trail: 'glow', tint: '#ffcb3d', speed: 12, hit: 'quake' },
     assassin:  { head: 'none', trail: 'none', speed: 30, hit: 'stab' },
     poison:    { head: 'flask', trail: 'drip', tint: '#7dff6a', speed: 10, hit: 'poison' },
     archer:    { head: 'arrow', trail: 'thin', tint: '#f3e3b5', speed: 20, hit: 'pierce' },
@@ -825,6 +826,9 @@
         stroke('M-.8 0 L.05 0', '#151827', 0.07); stroke('M-.8 0 L.05 0', '#c9a26a', 0.035);
         add('path', { d: 'M.2 0 L0 -.08 L.03 0 L0 .08 Z', fill: '#dfe4ee', stroke: '#151827', 'stroke-width': 0.02 });
         add('path', { d: 'M-.8 0 L-.92 -.08 M-.8 0 L-.92 .08 M-.7 0 L-.82 -.08 M-.7 0 L-.82 .08', stroke: color, 'stroke-width': 0.035, 'stroke-linecap': 'round' });
+        break;
+      case 'crown':
+        add('path', { d: 'M-.2 .12 L-.22 -.12 L-.1 0 L0 -.18 L.1 0 L.22 -.12 L.2 .12 Z', fill: color, stroke: '#151827', 'stroke-width': 0.03, transform: 'rotate(90)' });
         break;
       case 'bomb':
         add('circle', { r: 0.16, fill: '#2a2d3a', stroke: '#151827', 'stroke-width': 0.03 });
@@ -887,6 +891,7 @@
         for (const [cx, cy, r] of [[-0.14, -0.1, 0.1], [0.12, -0.18, 0.07], [0.05, 0.12, 0.08], [-0.2, 0.16, 0.05]]) add('circle', { cx, cy, r, fill: 'none', stroke: '#b8ff9e', 'stroke-width': 0.035 });
         break;
       case 'pierce': stroke('M-.5 0 L.1 0', '#c9a26a', 0.05); rays(6, 0.14, 0.34, '#fff4b0', 0.05); break;
+      case 'lock': add('rect', { x: -0.38, y: -0.38, width: 0.76, height: 0.76, rx: 0.08, fill: 'rgba(255,203,61,.18)', stroke: color, 'stroke-width': 0.06 }); stroke('M-.14 -.14 L.14 .14 M.14 -.14 L-.14 .14', color, 0.05); break;
       case 'smoke': for (const [cx, cy, r] of [[0, 0, 0.3], [-0.22, 0.08, 0.2], [0.22, 0.1, 0.2], [0, -0.22, 0.18]]) add('circle', { cx, cy, r, fill: color, opacity: 0.75 }); break;
       default: add('circle', { r: 0.3, fill: 'none', stroke: color, 'stroke-width': 0.08 });
     }
@@ -1151,7 +1156,7 @@
   const GRAPPLE_LEN = 5.5;    // 갈고리: 닿는 거리
   const WAVE_R = 3.2, WAVE_HALF = 45;   // 충격파: 반지름, 부채꼴 반각
   const HOMING_R = 5;         // 유도탄: 노리는 거리
-  const KING_DASH = 2;        // 킹: 조준 방향(8방향 중 가까운 쪽)으로 최대 2칸 돌진한 뒤 주변 8칸 강타
+  const KING_R = 4, CHECK_BONUS = 0.15;   // 킹(체크메이트): 노리는 거리, 적 주변 막힌 칸 하나당 피해 +15%
   const ASSASSIN_R = 4;       // 암살: 노리는 거리
   const POISON_LEN = 4.5, POISON_TICKS = 3, POISON_DMG = 8;   // 독: 사거리, 독 횟수, 독 피해
   const ARROW_LEN = 7, ARROW_BONUS = 0.12;   // 궁수: 사거리, 한 칸 멀어질 때마다 피해 +12%
@@ -1163,7 +1168,7 @@
     bishop:   { icon: '✖️', name: '비숍', desc: '대각선 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
     rook:     { icon: '➕', name: '룩', desc: '가로·세로 4방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 28, hard: 38 } },
     knight:   { icon: '🐴', name: '나이트', desc: 'L자 칸(체스 나이트 이동)을 골라 뛰어들어, 착지한 곳 주변 8칸의 적을 모두 타격', target: true, dmg: { easy: 28, hard: 37 } },
-    king:     { icon: '👑', name: '킹', desc: `조준한 방향(가로·세로·대각선 중 가까운 쪽)으로 최대 ${KING_DASH}칸 돌진한 뒤 주변 8칸을 강타`, aim: true, dmg: { easy: 30, hard: 40 } },
+    king:     { icon: '👑', name: '킹', desc: `체크메이트: ${KING_R}칸 안의 가장 가까운 적을 노림. 그 적 주변 8칸 중 막힌 칸(판 끝·다른 말·돌·상자·자기장)이 많을수록 강함 (한 칸마다 +${Math.round(CHECK_BONUS * 100)}%, 구석이면 ×1.75)`, dmg: { easy: 20, hard: 27 } },
     mortar:   { icon: '💣', name: '박격포', desc: '5칸 안의 칸을 골라 3×3 폭발 (가장자리 60%). 범위 안이면 자신도 맞음', target: true, dmg: { easy: 25, hard: 35 } },
     scatter:  { icon: '🎲', name: '난사', desc: '무작위 적 근처(±1칸) 무작위 좌표로 세 발, 각각 벽에 3번 튕기며 관통 (겹치면 누적). 운에 맡기는 한 방', dmg: { easy: 14, hard: 19 } },
     queen:    { icon: '👸', name: '퀸', desc: '가로·세로·대각선 8방향 동시 발사. 방향마다 첫 번째 적', dmg: { easy: 19, hard: 26 } },
@@ -1954,11 +1959,12 @@
         break;
       }
       case 'king': {
-        // 돌진한 칸(목표가 주어지면 그 칸 = 이미 돌진함) 주변 8칸
-        const [cx, cy] = target || kingDash(p);
-        if (!target && (cx !== p.x || cy !== p.y)) blink = [cx, cy];
-        ring(cx, cy);
-        for (let i = cells.length - 1; i >= 0; i--) if (cells[i][0] === cx && cells[i][1] === cy) cells.splice(i, 1);
+        // 체크메이트: 가장 가까운 적의 주변 8칸 중 막힌 칸 수만큼 강해진다
+        const foe = enemies(p).map(q => ({ q, d: Math.hypot(q.x - p.x, q.y - p.y) })).filter(o => o.d <= KING_R + 0.5)
+          .sort((m, n) => m.d - n.d || m.q.id - n.q.id)[0];
+        if (!foe) break;
+        const t = foe.q, locked = checkCells(t), at2 = [t.x + 0.5, t.y + 0.5];
+        rays.push({ pts: [[ox, oy], at2], hits: [{ q: t, d: foe.d, bounces: 0, at: at2, blocked: locked.length }], locked });
         break;
       }
       case 'assassin': {
@@ -2024,16 +2030,16 @@
     }
     return { rays, cells, blink };
   }
-  /** 킹 돌진: 조준 방향에 가장 가까운 8방향으로, 빈 칸이 이어지는 만큼 최대 KING_DASH 칸 */
-  function kingDash(p) {
-    const [dx, dy] = DIRS[Math.round(normAng(p.ang) / 45) % 8];
-    let x = p.x, y = p.y;
-    for (let k = 0; k < KING_DASH && open(x + dx, y + dy); k++) { x += dx; y += dy; }
-    return [x, y];
+  /** 체크메이트: q 주변 8칸 중 막힌 칸 (판 끝·다른 말·돌·상자·자기장) */
+  function checkCells(q) {
+    const lvl = zoneLevel();
+    return DIRS.map(([dx, dy]) => [q.x + dx, q.y + dy])
+      .filter(([x, y]) => !inB(x, y) || at(x, y, q) || obAt(x, y) || inZone(x, y, lvl));
   }
 
   function renderGuide() {
     clearFx('.guide, .guide-end, .guide-cell, .guide-hit, .guide-times');
+    if (el.pieces) el.pieces.querySelectorAll('.guide-label').forEach(n => n.remove());
     const p = cur();
     const on = p && p.alive && S.phase === 'choose';
     el.cells.classList.toggle('aimable', !!on && myTurn());
@@ -2057,6 +2063,7 @@
       svg('rect', { class: 'guide-cell blink', x: bx + 0.12, y: by + 0.12, width: 0.76, height: 0.76, stroke: p.color });
     }
     for (const r of plan.rays) {
+      for (const [x, y] of r.locked || []) if (inB(x, y)) svg('rect', { class: 'guide-cell lock', x: x + 0.15, y: y + 0.15, width: 0.7, height: 0.7, stroke: '#ffcb3d' });
       svg('polyline', { class: 'guide', points: r.pts.map(q => q.join(',')).join(' '), stroke: p.color });
       const e = r.pts[r.pts.length - 1];
       svg('circle', { class: 'guide-end', cx: e[0], cy: e[1], r: 0.09, fill: p.color });
@@ -2073,11 +2080,16 @@
     for (const r of plan.rays) for (const h of r.hits) {
       times.set(h.q, (times.get(h.q) || 0) + 1);
       if (p.style === 'ricochet' && h.bounces) bonus.set(h.q, Math.round(RICO_BONUS * 100 * h.bounces));
+      if (p.style === 'king' && h.blocked) bonus.set(h.q, Math.round(CHECK_BONUS * 100 * h.blocked));
     }
     for (const q of marked) {
       svg('circle', { class: 'guide-hit', cx: q.x + 0.5, cy: q.y + 0.5, r: 0.46 });
       const label = bonus.has(q) ? `+${bonus.get(q)}%` : (times.get(q) || 0) > 1 ? `×${times.get(q)}` : '';
-      if (label) svg('text', { class: 'guide-times', x: q.x + 0.95, y: q.y + 0.2 }).textContent = label;
+      if (label) {
+        // 판 위 SVG 글자는 작아서 흐리게 그려지므로, 말 위에 HTML 글씨로 띄운다
+        const stand = el.pieces.querySelector(`[data-id="${q.id}"] .stand`);
+        if (stand) { const t = document.createElement('div'); t.className = 'guide-label'; t.textContent = label; stand.appendChild(t); }
+      }
     }
     // 저격: 이번 턴에 돌릴 수 있는 조준 범위
     if (aimLimited(p) && myTurn()) {
@@ -2212,12 +2224,22 @@
     }
     // 킹 돌진 · 암살 순간이동: 먼저 옮겨 간 뒤 공격 (암살은 옮기기 전에 정한 목표 그대로)
     let pre = null;
-    if (p.style === 'king' || p.style === 'assassin') {
+    if (p.style === 'assassin') {
       pre = planAttack(p, p.style, null);
       if (pre.blink) await dashTo(p, pre.blink, p.style);
     }
     const plan = p.style === 'assassin' ? pre
-      : planAttack(p, p.style, p.style === 'knight' || p.style === 'king' ? [p.x, p.y] : p.style === 'scatter' ? tgts : tgt);
+      : planAttack(p, p.style, p.style === 'knight' ? [p.x, p.y] : p.style === 'scatter' ? tgts : tgt);
+    // 체크메이트: 적을 가두고 있는 칸을 잠깐 보여 준다
+    for (const r of plan.rays) for (const [x, y] of r.locked || []) if (inB(x, y)) impactFx(x + 0.5, y + 0.5, 'lock', '#ffcb3d');
+    const checkHit = p.style === 'king' && plan.rays[0] && plan.rays[0].hits[0];
+    if (checkHit) {
+      const n = checkHit.blocked;
+      toast(`♚ 체크${n >= 5 ? '메이트' : ''}! 막힌 칸 ${n} → 피해 ×${(1 + CHECK_BONUS * n).toFixed(2)}`, 1600);
+      log(`${tag(p)} ♚ 체크! ${tag(checkHit.q)} 주변 막힌 칸 ${n}개 → 피해 ×${(1 + CHECK_BONUS * n).toFixed(2)}`);
+      if (n >= 5) shakeBoard(2);
+      await sleep(350);
+    }
     let hitCount = 0;
     p.atk = (p.atk || 0) + 1;
     const look = lookOf(p.style);
@@ -2227,7 +2249,7 @@
       fn: () => {
         hitCount++;
         impactOn(h.q, look.hit, look.tint || p.color, Math.atan2(h.q.y - p.y, h.q.x - p.x));
-        const mult = p.style === 'ricochet' ? 1 + RICO_BONUS * h.bounces : p.style === 'archer' ? 1 + ARROW_BONUS * Math.floor(h.d) : 1;
+        const mult = p.style === 'ricochet' ? 1 + RICO_BONUS * h.bounces : p.style === 'archer' ? 1 + ARROW_BONUS * Math.floor(h.d) : p.style === 'king' ? 1 + CHECK_BONUS * (h.blocked || 0) : 1;
         const dealt = damage(h.q, hitDmg(mult), p, `${s.name}${h.bounces ? `(반사 ${h.bounces}회${p.style === 'ricochet' ? ` +${Math.round(RICO_BONUS * 100 * h.bounces)}%` : ''})` : ''}`);
         if (p.style === 'vampire' && dealt > 0) heal(p, Math.ceil(dealt / 3));
         if (p.style === 'poison' && dealt > 0 && h.q.alive) {
@@ -2248,7 +2270,7 @@
       const kind = CELL_HIT[p.style] || look.hit;
       S.hitKind = kind;
       for (const [x, y] of plan.cells) impactFx(x + 0.5, y + 0.5, kind, p.style === 'mortar' ? '#ff9f43' : p.color, Math.atan2(y - p.y, x - p.x));
-      if (p.style === 'mortar' || p.style === 'king' || p.style === 'bomber') shakeBoard(2);
+      if (p.style === 'mortar' || p.style === 'bomber') shakeBoard(2);
       else if (p.style === 'knight' || p.style === 'shockwave') shakeBoard(1);
       if (p.style === 'knight') { toast(`${s.icon} 착지!`, 900); if (window.Sfx) Sfx.attack('king', p.id); }
       await sleep(250);

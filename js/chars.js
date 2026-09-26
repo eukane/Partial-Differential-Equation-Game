@@ -106,8 +106,7 @@
   .k-king.st-attack .sceptre { animation: ch-slam .9s ease-in; transform-origin: 50% 100%; }
   @keyframes ch-slam { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-60deg) translateY(-6px); } 50%, 70% { transform: rotate(35deg); } }
   .k-king.st-attack .rig { animation: ch-stomp .9s ease-in; }
-  @keyframes ch-stomp { 0%, 100% { transform: translateX(0) scale(1, 1); } 25% { transform: translateX(22px) rotate(6deg); } 40% { transform: translate(22px, -10px) scale(.97, 1.04); }
-    55% { transform: translate(22px, 0) scale(1.1, .88); } 75% { transform: translateX(16px) scale(1, 1); } }
+  @keyframes ch-stomp { 0%, 100% { transform: scale(1, 1); } 35% { transform: translateY(-8px) scale(.97, 1.04); } 50% { transform: translateY(0) scale(1.08, .9); } 70% { transform: scale(1, 1); } }
   .k-king.st-attack .flash { animation: ch-ring .6s ease-out .42s; transform-origin: 50% 50%; }
   @keyframes ch-ring { 0% { opacity: 1; transform: scale(.3); } 100% { opacity: 0; transform: scale(1.3); } }
   .k-king.st-win .sceptre { animation: ch-raise 1.1s ease-in-out; transform-origin: 50% 100%; }
@@ -850,7 +849,7 @@
     bishop: ['주교관 · 사제복 · 금빛 지팡이', '공격: 지팡이를 휘두르면 ✕ 모양 빛'],
     rook: ['성벽 투구 · 갑옷 · ＋ 방패', '공격: 방패 들고 돌진 + ＋ 모양 빛'],
     knight: ['깃털 투구 · 기사 · 검', '공격: 위로 뛰었다 옆으로 내려찍기 (L자)'],
-    king: ['왕관 · 망토 · 콧수염 · 홀', '공격: 앞으로 돌진해 홀로 바닥을 쾅 → 둥근 충격'],
+    king: ['왕관 · 망토 · 콧수염 · 홀', '공격: 체크메이트! 홀로 바닥을 쾅 → 둥근 충격'],
     mortar: ['철모 · 고글 · 군복 · 박격포', '공격: 포탄이 하늘로 쏘아 올라감 + 연기'],
     scatter: ['페도라 · 선글라스 · 정장 · 기관단총', '공격: 두두두 연사 + 여기저기 섬광'],
     queen: ['티아라 · 긴 머리 · 드레스 · 별 지팡이', '공격: 지팡이를 들면 8방향 별빛'],
