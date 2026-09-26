@@ -1,4 +1,4 @@
-/* 수학 배틀 배경음악
+/* 저급체스 배경음악
  * 스타일: swing(일렉트로스윙, 기본) · orch(오케스트라 록). 파일 이름은 swing-battle.mp3 / battle.mp3 처럼.
  * audio/*.mp3 는 tools/music/compose.py 로 작곡한 오리지널 곡을 실제 악기 샘플(FluidR3_GM 사운드폰트)로 렌더링한 것.
  *   battle  : 평소 전투 (164bpm) — 신스 도입 → 호른 선율 + 기타 뮤트 → 트럼펫·신스 리드·기타 질주·합창이 터지는 격정 파트

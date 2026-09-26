@@ -1,4 +1,4 @@
-/* 수학 배틀 직업 캐릭터 (코드로 그린 2등신 SD 벡터)
+/* 저급체스 직업 캐릭터 (코드로 그린 2등신 SD 벡터)
  * 머리·몸·팔·무기를 따로 그려 부위별로 움직인다. 플레이어 색은 --pc 로 들어간다 (.pc / .pc-d).
  * 동작: st-idle(가만히) · st-attack(공격) · st-hit(맞음) · st-ko(탈락) · st-win(승리)
  * 사용법: Chars.svg('sniper') → SVG 문자열,  Chars.play(svg요소, 'attack')
