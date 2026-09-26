@@ -3053,8 +3053,8 @@
       botTurn(S.botToken = (S.botToken || 0) + 1, true);
     },
     covered: {},       // AI 가 대신 둔 적 있는 자리 (돌아올 때까지 다음 차례는 바로 대신)
-    /** 자리 비운 사람 차례를 AI 가 대신 두기까지: 방을 떠났거나 이미 대신 뒀으면 2초, 화면만 숨겼으면 8초 */
-    awayDelay(i) { return !this.peerOfSeat(i) || this.covered[i] ? 2000 : 8000; },
+    /** 자리 비운 사람 차례를 AI 가 대신 두기까지 15초 */
+    awayDelay() { return 15000; },
     /** 화면 표시용: 지금 차례인 사람이 자리를 비웠으면 AI 가 대신 두기까지 남은 초 (없으면 null) */
     awayLeft(i) {
       if (!S.online || this.seatActive(i)) { this.awayView = null; return null; }
